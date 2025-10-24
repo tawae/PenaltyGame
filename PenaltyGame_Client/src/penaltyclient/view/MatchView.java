@@ -12,6 +12,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.*;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.*;
@@ -23,6 +24,8 @@ import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Scale;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+
+import penaltyclient.controller.MatchController;
 
 
 public class MatchView extends Application {
@@ -36,9 +39,16 @@ public class MatchView extends Application {
     private Ellipse goalkeeper;
     private Label scoreLabel;
     private Label messageLabel;
+    private Button shootButton;
+    
+    private boolean inputEnabled = false;
     private int selectedZone = -1;
     private int goals = 0;
     private int attempts = 0;
+    
+    private MatchController controller;
+    private String playerName;
+    private String opponentName;
     
     @Override
     public void start(Stage primaryStage) {
@@ -316,7 +326,7 @@ public class MatchView extends Application {
         scoreLabel.setTextFill(Color.WHITE);
         
         // Shoot button
-        Button shootButton = new Button("SHOOT!");
+        shootButton = new Button("SHOOT!");
         shootButton.setPrefSize(120, 40);
         shootButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
         shootButton.setStyle(
@@ -325,6 +335,7 @@ public class MatchView extends Application {
             "-fx-background-radius: 5; " +
             "-fx-cursor: hand;"
         );
+//        shootButton.setOnAction(e -> showErrorMessage("clicked"));
         shootButton.setOnAction(e -> performShoot());
         
         // Message label
@@ -440,7 +451,7 @@ public class MatchView extends Application {
         shootAnimation.play();
     }
     
-    private void resetField() {
+    public void resetField() {
         // Reset ball
         ball.setCenterX(450);
         ball.setCenterY(350);
@@ -491,6 +502,38 @@ public class MatchView extends Application {
                     }
                     break;
             }
+        });
+    }
+    
+    public void enableChoosingZone() {
+        inputEnabled = true;
+        selectedZone = -1;
+        shootButton.setDisable(true);
+        for (Rectangle zone : goalZones) {
+            zone.setOpacity(0);
+        }
+    }
+    
+    public int getSelectedZone(){
+        return selectedZone;
+    }
+    
+    public void updateMessage(String message) {
+        Platform.runLater(() -> messageLabel.setText(message));
+    }
+    
+    public void updateScore(int myScore, int opponentScore) {
+        Platform.runLater(() -> {
+            scoreLabel.setText("Score: " + myScore + " - " + opponentScore);
+        });
+    }
+    
+    public void showErrorMessage(String message) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setContentText(message);
+            alert.showAndWait();
         });
     }
     

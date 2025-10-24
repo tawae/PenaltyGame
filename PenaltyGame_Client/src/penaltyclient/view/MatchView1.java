@@ -37,44 +37,6 @@ public class MatchView1 extends Application {
     private ClientNetwork network;
     private String playerName;
     
-    @Override
-    public void start(Stage primaryStage) {
-        // Show login dialog first
-        showLoginDialog(primaryStage);
-    }
-    
-    private void showLoginDialog(Stage primaryStage) {
-        Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Penalty Shootout - Login");
-        dialog.setHeaderText("Enter your name to play");
-        
-        ButtonType loginButtonType = new ButtonType("Connect", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(loginButtonType, ButtonType.CANCEL);
-        
-        TextField nameField = new TextField();
-        nameField.setPromptText("Player name");
-        
-        VBox vbox = new VBox(10);
-        vbox.getChildren().addAll(new Label("Name:"), nameField);
-        dialog.getDialogPane().setContent(vbox);
-        
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == loginButtonType) {
-                return nameField.getText();
-            }
-            return null;
-        });
-        
-        dialog.showAndWait().ifPresent(name -> {
-            if (name != null && !name.trim().isEmpty()) {
-                playerName = name.trim();
-                connectToServer(primaryStage);
-            } else {
-                Platform.exit();
-            }
-        });
-    }
-    
     private void connectToServer(Stage primaryStage) {
         network = new ClientNetwork();
         
@@ -452,13 +414,6 @@ public class MatchView1 extends Application {
             alert.setContentText(message);
             alert.showAndWait();
         });
-    }
-    
-    public void showErrorDialog(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Connection Error");
-        alert.setContentText(message);
-        alert.showAndWait();
     }
     
     private void setupControls(Scene scene) {

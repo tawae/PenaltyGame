@@ -4,11 +4,11 @@ import javafx.application.Platform;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import javafx.util.Duration;
-import penaltyclient.view.MatchView1;
+import penaltyclient.view.MatchView;
 import network.ClientNetwork;
 
 public class MatchController {
-    private MatchView1 matchView;
+    private MatchView matchView;
     private ClientNetwork network;
     private String playerName;
     private String opponentName;
@@ -26,7 +26,7 @@ public class MatchController {
     private int remainingSeconds = 10;
     private int selectedZone = -1;
     
-    public MatchController(MatchView1 view, ClientNetwork network, String playerName) {
+    public MatchController(MatchView view, ClientNetwork network, String playerName) {
         this.matchView = view;
         this.network = network;
         this.playerName = playerName;
@@ -50,7 +50,7 @@ public class MatchController {
             network.joinQueue();
             matchView.updateMessage("Waiting for opponent...");
         } else {
-            matchView.showErrorDialog("Could not connect to server!");
+            matchView.showErrorMessage("Could not connect to server!");
             Platform.exit();
         }
     }
@@ -86,10 +86,7 @@ public class MatchController {
         isMyTurn = firstShooter.equals(playerName);
         myRole = isMyTurn ? "SHOOTER" : "GOALKEEPER";
         
-        matchView.showMatchStartMessage(
-            "Match started against " + opponentName + "!\n" +
-            (isMyTurn ? "You shoot first!" : "Opponent shoots first!")
-        );
+        matchView.updateMessage("Bắt đầu! " + (isMyTurn ? "Lượt bạn sút!" : "Lượt bạn bắt!"));
         
         // Wait 3 seconds then start first turn
         Timeline delay = new Timeline(new KeyFrame(Duration.seconds(3), e -> {
@@ -116,11 +113,11 @@ public class MatchController {
         remainingSeconds = 10;
         
         if (myRole.equals("SHOOTER")) {
-            matchView.enableShooterMode();
-            matchView.updateMessage("Your turn to SHOOT! Select a zone (" + remainingSeconds + "s)");
+            matchView.enableChoosingZone();
+            matchView.updateMessage("Lượt bạn sút! (" + remainingSeconds + "s)");
         } else {
-            matchView.enableGoalkeeperMode();
-            matchView.updateMessage("Your turn to SAVE! Predict shooter's zone (" + remainingSeconds + "s)");
+            matchView.enableChoosingZone();
+            matchView.updateMessage("Lượt bạn bắt! (" + remainingSeconds + "s)");
         }
         
         startTurnTimer();
@@ -136,7 +133,7 @@ public class MatchController {
             
             if (remainingSeconds > 0) {
                 String action = myRole.equals("SHOOTER") ? "SHOOT" : "SAVE";
-                matchView.updateMessage("Your turn to " + action + "! (" + remainingSeconds + "s)");
+                matchView.updateMessage("Lượt bạn " + action + "! (" + remainingSeconds + "s)");
             } else {
                 // Time's up - submit choice or random
                 submitChoice();
@@ -151,9 +148,9 @@ public class MatchController {
         if (!isMyTurn) return;
         
         selectedZone = zoneIndex;
-        String[] zoneNames = {"Top Left", "Top Center", "Top Right", 
-                             "Bottom Left", "Bottom Center", "Bottom Right"};
-        matchView.updateMessage("Selected: " + zoneNames[zoneIndex] + " - Press SPACE to confirm!");
+        String[] zoneNames = {"Trái trên", "Giữa trên", "Phải trên", 
+                             "Trái dưới", "Giữa dưới", "Phải dưới"};
+        matchView.updateMessage("Selected: " + zoneNames[zoneIndex] + " - Nhấn SPACE để xác nhận!");
     }
     
     // Called by MatchView when player confirms (SPACE key or SHOOT button)
@@ -164,31 +161,31 @@ public class MatchController {
     }
     
     private void submitChoice() {
-        if (turnTimer != null) {
-            turnTimer.stop();
-        }
-        
+//        if (turnTimer != null) {
+//            turnTimer.stop();
+//        }
+//        
         // If no zone selected, choose random
-        if (selectedZone == -1) {
+        if (matchView.getSelectedZone() == -1) {
             selectedZone = (int)(Math.random() * 6);
         }
         
         // Disable further input
-        isMyTurn = false;
-        matchView.disableInput();
-        matchView.updateMessage("Waiting for result...");
-        
+//        isMyTurn = false;
+//        matchView.disableInput();
+//        matchView.updateMessage("Waiting for result...");
+//        
         // Send choice to server
         network.sendMessage("CHOICE|" + selectedZone);
         
         // Wait for opponent and result
-        waitForOpponent();
+//        waitForOpponent();
     }
     
-    private void waitForOpponent() {
-        matchView.disableInput();
-        matchView.updateMessage("Waiting for opponent...");
-    }
+//    private void waitForOpponent() {
+//        matchView.disableInput();
+//        matchView.updateMessage("Waiting for opponent...");
+//    }
     
     private void handleTurnResult(String[] parts) {
         // TURN_RESULT|shooterZone|keeperZone|isGoal|myNewScore|opponentNewScore|shooterName
@@ -264,7 +261,7 @@ public class MatchController {
                           "Final Score: " + finalMyScore + " - " + finalOpponentScore;
         }
         
-        matchView.showMatchEndMessage(resultMessage);
+        matchView.updateMessage(resultMessage);
     }
     
     private void handleOpponentDisconnected() {
