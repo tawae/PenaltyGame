@@ -9,11 +9,12 @@ import java.io.*;
 import java.net.*;
 
 public class User {
-    private Socket socket;
+//    private Socket socket;
     private int choice = -1;
     private int userId;
     private String username;
     private String password;
+    private String currentMatchId = null;
     
     public int getUserId() {
         return userId;
@@ -40,14 +41,34 @@ public class User {
         //this.socket = socket;
     }
 
-    public void setChoice(int choice) { 
-        this.choice = choice; 
-    }
-    public int getChoice() { 
-        return choice;
-    }
+//    public void setChoice(int choice) { 
+//        this.choice = choice; 
+//    }
+//    public int getChoice() { 
+//        return choice;
+//    }
 
-    public PrintWriter getWriter() throws IOException {
-        return new PrintWriter(socket.getOutputStream(), true);
+     // Override equals và hashCode để so sánh User dễ dàng hơn
+//     @Override
+//     public boolean equals(Object o) {
+//         if (this == o) return true;
+//         if (o == null || getClass() != o.getClass()) return false;
+//         User user = (User) o;
+//         return userId == user.userId && Objects.equals(username, user.username);
+//     }
+//
+//     @Override
+//     public int hashCode() {
+//         return Objects.hash(userId, username);
+//     }
+
+//    public PrintWriter getWriter() throws IOException {
+//        return new PrintWriter(socket.getOutputStream(), true);
+//    }
+    public void setCurrentMatchId (String matchId) {
+        this.currentMatchId = matchId;
+    }
+    public String getCurrentMatchId() {
+        return currentMatchId;
     }
 }

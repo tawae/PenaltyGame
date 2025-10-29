@@ -25,9 +25,11 @@ public class ClientHandler extends Thread {
     private ObjectInputStream in;
     private User user;
     private String username;
+    private MatchController matchController;
     
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, MatchController matchController) {
         this.socket = socket;
+        this.matchController = matchController;
         try {
             this.out = new ObjectOutputStream(socket.getOutputStream());
             this.out.flush(); // flush header ngay
@@ -46,7 +48,7 @@ public class ClientHandler extends Thread {
                 Object obj = in.readObject();
                 if(obj instanceof String) {
                     String msg = (String) obj;
-                    
+                    System.out.println("REceived msg: " + msg);
                     // split with form a:b a is command, b is data and can have many data like a:b:c
                     String[] parts = msg.split(":");
                     String command = parts[0];
@@ -95,6 +97,27 @@ public class ClientHandler extends Thread {
                             LobbyController.handleResponseInviteToB(fromUser2, user, false);
                             break;
                         
+                        case "CHOICE":
+                            if (matchController != null && user != null && parts.length >= 2) {
+                                try {
+                                    int zoneChoice = Integer.parseInt(parts[1]);
+                                    matchController.handlePlayerChoice(user, zoneChoice); // Gọi MatchController xử lý
+                                } catch (NumberFormatException e) {
+                                    System.err.println("Invalid zone choice format: " + msg);
+                                }
+                            } else {
+                                System.err.println("Cannot handle CHOICE: MatchController or User is null, or invalid message format.");
+                            }
+                            break;
+
+                        // --- Lệnh rời trận (Nếu Client có gửi) ---
+                        case "LEAVE_MATCH":
+                            if (matchController != null && user != null) {
+                                matchController.handlePlayerDisconnect(user);
+                            }
+                             // Không cần đóng kết nối ngay, có thể client chỉ quay về lobby
+                            break;
+                            
                         default: System.out.println("Unknown command:" + msg);
                     }
                 }
@@ -118,9 +141,13 @@ public class ClientHandler extends Thread {
         try {
             this.out.writeObject(msg);
             this.out.flush();
+            System.out.println("Server send: " + msg);
         }
         catch(Exception e) {
             e.printStackTrace();
         }
-    }   
+    }
+    public User getAssociatedUser() {
+        return user;
+    }
 }
