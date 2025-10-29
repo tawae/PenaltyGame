@@ -1,6 +1,7 @@
 package penaltyserver.controller;
 
 import java.io.ObjectOutputStream;
+import java.sql.Timestamp;
 import java.util.*;
 import penaltyserver.PenaltyServer;
 import penaltyserver.model.ClientHandler;
@@ -14,300 +15,336 @@ import penaltyserver.model.UserDAO;
 import penaltyserver.model.User;
 
 public class MatchController {
-    private PenaltyServer server;
     private Map<String, Match> activeMatches;
-    private Queue<User> waitingPlayers;
     
-    public MatchController(PenaltyServer server) {
-        this.server = server;
+    public MatchController() {
         this.activeMatches = new HashMap<>();
-        this.waitingPlayers = new LinkedList<>();
     }
     
-    public void handlePlayerJoinQueue(User user) {
-        waitingPlayers.add(user);
-        System.out.println("User " + user.getUsername() + " joined queue. Queue size: " + waitingPlayers.size());
-        
-        // Try to create a match if we have 2 players
-        if (waitingPlayers.size() >= 2) {
-            createMatch();
+    public void createAndStartMatch(User player1, User player2) {
+        String matchId = UUID.randomUUID().toString(); // Tạo ID trận đấu duy nhất
+
+        // Lấy ClientHandler của 2 người chơi từ SessionManager
+        ClientHandler handler1 = SessionManager.getSession(player1.getUsername());
+        ClientHandler handler2 = SessionManager.getSession(player2.getUsername());
+
+        if (handler1 == null || handler2 == null) {
+            System.err.println("Error starting match: One or both players are not online.");
+            // Có thể gửi thông báo lỗi về client nếu cần
+            if(handler1 != null) handler1.sendMessage("MATCH_FAIL:Opponent not found");
+            if(handler2 != null) handler2.sendMessage("MATCH_FAIL:Opponent not found");
+            return;
         }
-    }
-    
-    private void createMatch() {
-        User player1 = waitingPlayers.poll();
-        User player2 = waitingPlayers.poll();
-        
-        if (player1 == null || player2 == null) return;
-        
-        String matchId = UUID.randomUUID().toString();
-        Match match = new Match(matchId, player1, player2);
-        
+
+        // Tạo đối tượng Match mới
+        Match match = new Match(matchId, player1, player2, handler1, handler2);
         activeMatches.put(matchId, match);
-        player1.setMatchId(matchId);
-        player2.setMatchId(matchId);
-        
-        System.out.println("Match created: " + player1.getUsername() + " vs " + player2.getUsername());
-        
-        // Start match
-        match.startMatch();
+
+        // Lưu matchId vào User object để ClientHandler có thể truy xuất
+        player1.setCurrentMatchId(matchId); // Giả sử có method này trong User
+        player2.setCurrentMatchId(matchId);
+
+        System.out.println("Match created [" + matchId + "]: " + player1.getUsername() + " vs " + player2.getUsername());
+
+        // Bắt đầu trận đấu
+        startMatchLogic(match);
     }
     
-    public void handlePlayerChoice(User user, int zoneChoice) {
-        String matchId = user.getMatchId();
-        Match match = activeMatches.get(matchId);
-        
-        if (match != null) {
-            match.registerChoice(user, zoneChoice);
+    private void startMatchLogic(Match match) {
+        // Random người sút trước
+        User firstShooter;
+        if (Math.random() < 0.5) {
+            match.setCurrentShooter(match.getPlayer1());
+            match.setCurrentKeeper(match.getPlayer2());
+        } else {
+            match.setCurrentShooter(match.getPlayer2());
+            match.setCurrentKeeper(match.getPlayer1());
         }
+        firstShooter = match.getCurrentShooter();
+
+        // Gửi thông báo MATCH_START cho cả hai
+        match.sendToPlayer(match.getPlayer1(), "MATCH_START:" + match.getPlayer2().getUsername() + ":" + firstShooter.getUsername());
+        match.sendToPlayer(match.getPlayer2(), "MATCH_START:" + match.getPlayer1().getUsername() + ":" + firstShooter.getUsername());
+
+        System.out.println("Match [" + match.getMatchId() + "] starting: " + firstShooter.getUsername() + " shoots first.");
+
+        // Bắt đầu lượt đầu tiên sau delay
+        Timer startTimer = new Timer();
+        startTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                startTurn(match); // Gọi hàm bắt đầu lượt của controller
+            }
+        }, 2000);
+    }
+    
+    private void startTurn(Match match) {
+        // Hủy timer cũ (nếu có) của trận đấu này
+        Timer oldTimer = match.getTurnTimer();
+        if (oldTimer != null) {
+            oldTimer.cancel();
+        }
+
+        // Reset lựa chọn
+        match.setShooterChoice(null);
+        match.setKeeperChoice(null);
+
+        User currentShooter = match.getCurrentShooter();
+        User currentKeeper = match.getCurrentKeeper();
+
+        // Gửi thông báo TURN_START
+        String roleShooter = "SHOOTER";
+        String roleKeeper = "GOALKEEPER";
+        match.sendToPlayer(currentShooter, "TURN_START:" + match.getCurrentRound() + ":" + roleShooter);
+        match.sendToPlayer(currentKeeper, "TURN_START:" + match.getCurrentRound() + ":" + roleKeeper);
+
+        System.out.println("Match [" + match.getMatchId() + "] Round " + match.getCurrentRound() + ": "
+                + currentShooter.getUsername() + " (" + roleShooter + "), "
+                + currentKeeper.getUsername() + " (" + roleKeeper + ")");
+
+        // Bắt đầu timer mới
+        Timer turnTimer = new Timer();
+        match.setTurnTimer(turnTimer); // Lưu timer vào đối tượng Match
+        turnTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                System.out.println("Match [" + match.getMatchId() + "] Round " + match.getCurrentRound() + " - Time's up!");
+                handleTimeout(match); // Gọi hàm xử lý timeout của controller
+            }
+        }, 15000); // 15 giây
+    }
+    
+    private synchronized void handleTimeout(Match match) {
+        // Kiểm tra xem lượt này đã được xử lý chưa (tránh gọi processTurn nhiều lần)
+        if (match.getTurnTimer() == null) {
+            System.out.println("Match [" + match.getMatchId() + "] - Timeout ignored, turn already processed.");
+            return; // Lượt đã được xử lý (ví dụ: cả 2 đã chọn)
+        }
+        match.setTurnTimer(null); // Đánh dấu timer đã xử lý (hoặc bị hủy)
+
+        boolean choiceMadeByTimeout = false;
+        if (match.getShooterChoice() == null) {
+            match.setShooterChoice((int) (Math.random() * 6));
+            System.out.println("Match [" + match.getMatchId() + "]: " + match.getCurrentShooter().getUsername() + " timeout, random choice: " + match.getShooterChoice());
+            choiceMadeByTimeout = true;
+        }
+        if (match.getKeeperChoice() == null) {
+            match.setKeeperChoice((int) (Math.random() * 6));
+            System.out.println("Match [" + match.getMatchId() + "]: " + match.getCurrentKeeper().getUsername() + " timeout, random choice: " + match.getKeeperChoice());
+            choiceMadeByTimeout = true;
+        }
+
+        // Chỉ gọi processTurn nếu timeout thực sự đã tạo ra lựa chọn cuối cùng
+        if (choiceMadeByTimeout) {
+            processTurn(match);
+        }
+    }
+    
+    public synchronized void handlePlayerChoice(User user, int zoneChoice) {
+        String matchId = user.getCurrentMatchId();
+        if (matchId == null) {
+            System.err.println("Error handling choice: User " + user.getUsername() + " is not in a match.");
+            return;
+        }
+        Match match = activeMatches.get(matchId);
+        if (match == null) {
+            System.err.println("Error handling choice: Match not found for ID " + matchId);
+            user.setCurrentMatchId(null); // Reset ID nếu trận không tồn tại
+            return;
+        }
+
+        // Kiểm tra xem lượt chơi có còn hợp lệ không (timer còn chạy không)
+        if (match.getTurnTimer() == null) {
+            System.out.println("Match [" + matchId + "]: Choice from " + user.getUsername() + " ignored, turn already processed or timed out.");
+            return; // Lượt đã kết thúc
+        }
+
+        User currentShooter = match.getCurrentShooter();
+        User currentKeeper = match.getCurrentKeeper();
+
+        boolean choiceRegistered = false;
+        if (user.equals(currentShooter)) {
+            if (match.getShooterChoice() == null) {
+                match.setShooterChoice(zoneChoice);
+                System.out.println("Match [" + matchId + "]: " + currentShooter.getUsername() + " chose zone " + zoneChoice);
+                match.sendToPlayer(currentKeeper, "WAITING_FOR_OPPONENT");
+                choiceRegistered = true;
+            }
+        } else if (user.equals(currentKeeper)) {
+            if (match.getKeeperChoice() == null) {
+                match.setKeeperChoice(zoneChoice);
+                System.out.println("Match [" + matchId + "]: " + currentKeeper.getUsername() + " chose zone " + zoneChoice);
+                match.sendToPlayer(currentShooter, "WAITING_FOR_OPPONENT");
+                choiceRegistered = true;
+            }
+        } else {
+            System.err.println("Error in Match [" + matchId + "]: User " + user.getUsername() + " is not part of this turn.");
+            return;
+        }
+
+        if (!choiceRegistered) {
+            System.out.println("Match [" + matchId + "]: " + user.getUsername() + " attempted to choose again.");
+        }
+
+        // Nếu cả hai đã chọn, xử lý lượt ngay và hủy timer
+        if (match.getShooterChoice() != null && match.getKeeperChoice() != null) {
+            Timer timer = match.getTurnTimer();
+            if (timer != null) {
+                timer.cancel();
+                match.setTurnTimer(null); // Đánh dấu timer đã bị hủy
+                System.out.println("Match [" + matchId + "]: Both players chose, processing turn.");
+                processTurn(match); // Gọi hàm xử lý của controller
+            } else {
+                // Trường hợp hiếm: Cả hai chọn gần như cùng lúc timeout xảy ra
+                System.out.println("Match [" + matchId + "]: Both players chose, but turn might have already timed out or processed.");
+            }
+        }
+    }
+    
+    private void processTurn(Match match) {
+        Integer shooterChoice = match.getShooterChoice();
+        Integer keeperChoice = match.getKeeperChoice();
+        User currentShooter = match.getCurrentShooter();
+
+        // Kiểm tra null phòng trường hợp gọi hàm này khi chưa đủ lựa chọn (dù không nên xảy ra)
+        if (shooterChoice == null || keeperChoice == null) {
+            System.err.println("Error processing turn for Match [" + match.getMatchId() + "]: Choices not complete.");
+            return;
+        }
+
+        boolean isGoal = (!shooterChoice.equals(keeperChoice));
+        String resultStr = isGoal ? "GOAL" : "SAVE";
+
+        if (isGoal) {
+            match.incrementScore(currentShooter); // Cập nhật điểm trong model Match
+        }
+
+        System.out.println("Match [" + match.getMatchId() + "] Turn Result: Shooter(" + shooterChoice + ") vs Keeper(" + keeperChoice + ") -> " + resultStr);
+        System.out.println("Match [" + match.getMatchId() + "] Score: " + match.getPlayer1().getUsername() + " " + match.getPlayer1Score() + " - " + match.getPlayer2Score() + " " + match.getPlayer2().getUsername());
+
+        // Gửi kết quả
+        String resultP1 = "TURN_RESULT:" + shooterChoice + ":" + keeperChoice + ":" + resultStr + ":"
+                + match.getPlayer1Score() + ":" + match.getPlayer2Score() + ":" + currentShooter.getUsername();
+        String resultP2 = "TURN_RESULT:" + shooterChoice + ":" + keeperChoice + ":" + resultStr + ":"
+                + match.getPlayer2Score() + ":" + match.getPlayer1Score() + ":" + currentShooter.getUsername();
+
+        match.sendToPlayer(match.getPlayer1(), resultP1);
+        match.sendToPlayer(match.getPlayer2(), resultP2);
+
+        // Lên lịch kiểm tra và chuyển lượt sau delay
+        Timer nextTurnTimer = new Timer();
+        nextTurnTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                checkAndProceed(match);
+            }
+        }, 3000);
+    }
+    
+    private void checkAndProceed(Match match) {
+        boolean roundCompleted = match.getCurrentKeeper().equals(match.getPlayer1()); // Lượt bắt của P1 vừa xong
+
+        if (match.isSuddenDeath()) {
+            if (roundCompleted && match.getPlayer1Score() != match.getPlayer2Score()) {
+                endMatch(match, match.getPlayer1Score() > match.getPlayer2Score() ? match.getPlayer1() : match.getPlayer2());
+            } else {
+                swapRolesAndNextTurn(match);
+            }
+        } else { // Normal rounds
+            if (match.getCurrentRound() > match.getMaxNormalRounds() && roundCompleted) {
+                if (match.getPlayer1Score() == match.getPlayer2Score()) {
+                    match.setSuddenDeath(true);
+                    System.out.println("Match [" + match.getMatchId() + "] entering Sudden Death.");
+                    swapRolesAndNextTurn(match);
+                } else {
+                    endMatch(match, match.getPlayer1Score() > match.getPlayer2Score() ? match.getPlayer1() : match.getPlayer2());
+                }
+            } else {
+                if (roundCompleted) {
+                    match.setCurrentRound(match.getCurrentRound() + 1);
+                }
+                swapRolesAndNextTurn(match);
+            }
+        }
+    }
+    
+    private void swapRolesAndNextTurn(Match match) {
+        match.swapRoles(); // Đổi vai trò trong model Match
+        startTurn(match); // Bắt đầu lượt mới
+    }
+
+    // Kết thúc trận đấu cho Match cụ thể
+    private void endMatch(Match match, User winner) {
+        String winnerUsername = (winner != null) ? winner.getUsername() : "DRAW";
+        match.setMatchStatus("finished");
+        match.setEndTime(new Timestamp(System.currentTimeMillis())); // Ghi thời gian kết thúc
+        System.out.println("Match [" + match.getMatchId() + "] ended. Winner: " + winnerUsername);
+
+        // Hủy timer nếu còn
+        Timer timer = match.getTurnTimer();
+        if (timer != null) {
+            timer.cancel();
+            match.setTurnTimer(null);
+        }
+
+        // Gửi thông báo kết thúc
+        match.sendToPlayer(match.getPlayer1(), "MATCH_END:" + winnerUsername + ":" + match.getPlayer1Score() + ":" + match.getPlayer2Score());
+        match.sendToPlayer(match.getPlayer2(), "MATCH_END:" + winnerUsername + ":" + match.getPlayer2Score() + ":" + match.getPlayer1Score());
+
+        // Dọn dẹp
+        activeMatches.remove(match.getMatchId());
+        if (match.getPlayer1() != null) {
+            match.getPlayer1().setCurrentMatchId(null);
+        }
+        if (match.getPlayer2() != null) {
+            match.getPlayer2().setCurrentMatchId(null);
+        }
+        // Lưu DB nếu cần
     }
     
     public void handlePlayerDisconnect(User user) {
-        String matchId = user.getMatchId();
-        if (matchId != null) {
-            Match match = activeMatches.get(matchId);
-            if (match != null) {
-                match.handleDisconnect(user);
-                activeMatches.remove(matchId);
-            }
+        String matchId = user.getCurrentMatchId();
+        if (matchId == null) {
+            return; // Không trong trận nào
         }
-        
-        // Remove from waiting queue if present
-        waitingPlayers.remove(user);
+        Match match = activeMatches.get(matchId);
+        if (match == null) {
+            return; // Trận không tồn tại hoặc đã kết thúc
+        }
+        System.out.println("Handling disconnect for " + user.getUsername() + " in match " + matchId);
+
+        // Hủy timer nếu còn
+        Timer timer = match.getTurnTimer();
+        if (timer != null) {
+            timer.cancel();
+            match.setTurnTimer(null);
+        }
+
+        match.setMatchStatus("aborted"); // Đánh dấu trận bị hủy
+        match.setEndTime(new Timestamp(System.currentTimeMillis()));
+
+        User otherPlayer = match.getOtherPlayer(user);
+
+        // Gửi thông báo và xử thắng cho người còn lại
+        if (otherPlayer != null) {
+            ClientHandler otherHandler = SessionManager.getSession(otherPlayer.getUsername());
+            if (otherHandler != null) { // Kiểm tra xem người kia còn online không
+                otherHandler.sendMessage("OPPONENT_DISCONNECTED");
+                // Gửi luôn kết quả thắng (tùy chọn)
+                // otherHandler.sendMessage("MATCH_END:" + otherPlayer.getUsername() + ":" + (otherPlayer.equals(match.getPlayer1())?match.getPlayer1Score():match.getPlayer2Score()) + ":" + (otherPlayer.equals(match.getPlayer1())?match.getPlayer2Score():match.getPlayer1Score()) );
+            }
+            otherPlayer.setCurrentMatchId(null); // Reset matchId người còn lại
+        }
+
+        // Dọn dẹp
+        activeMatches.remove(matchId);
+        user.setCurrentMatchId(null); // Reset matchId người disconnect
+        System.out.println("Match [" + matchId + "] removed due to disconnect.");
     }
     
     // Inner class representing a match between two players
-    private class Match {
-        private String matchId;
-        private User player1;
-        private User player2;
-        
-        private User currentShooter;
-        private User currentKeeper;
-        
-        private int player1Score = 0;
-        private int player2Score = 0;
-        private int currentRound = 1;
-        private int maxRounds = 5;
-        
-        private Integer shooterChoice = null;
-        private Integer keeperChoice = null;
-        
-        public Match(String matchId, User player1, User player2) {
-            this.matchId = matchId;
-            this.player1 = player1;
-            this.player2 = player2;
-        }
-        
-        public void startMatch() {
-            // Randomly choose who shoots first
-            if (Math.random() < 0.5) {
-                currentShooter = player1;
-                currentKeeper = player2;
-            } else {
-                currentShooter = player2;
-                currentKeeper = player1;
-            }
-            
-            // Notify both players
-            server.sendToPlayer(player1, "MATCH_START|" + player2.getUsername() + "|" + currentShooter.getUsername());
-            server.sendToPlayer(player2, "MATCH_START|" + player1.getUsername() + "|" + currentShooter.getUsername());
-            
-            System.out.println("Match started: " + currentShooter.getUsername() + " shoots first");
-            
-            // Start first turn after delay
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            
-            startTurn();
-        }
-        
-        private void startTurn() {
-            shooterChoice = null;
-            keeperChoice = null;
-            
-            // Notify shooter
-            server.sendToPlayer(currentShooter, "TURN_START|" + currentRound + "|SHOOTER");
-            
-            // Notify keeper
-            server.sendToPlayer(currentKeeper, "TURN_START|" + currentRound + "|GOALKEEPER");
-            
-            System.out.println("Round " + currentRound + ": " + currentShooter.getUsername() + " shoots, " + currentKeeper.getUsername() + " keeps");
-            
-            // Start timer for choices (10 seconds)
-            Timer timer = new Timer();
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    // Auto-submit random choices if not received
-                    synchronized (Match.this) {
-                        if (shooterChoice == null) {
-                            shooterChoice = (int)(Math.random() * 6);
-                            System.out.println(currentShooter.getUsername() + " timeout - random zone: " + shooterChoice);
-                        }
-                        if (keeperChoice == null) {
-                            keeperChoice = (int)(Math.random() * 6);
-                            System.out.println(currentKeeper.getUsername() + " timeout - random zone: " + keeperChoice);
-                        }
-                        
-                        if (shooterChoice != null && keeperChoice != null) {
-                            processTurn();
-                        }
-                    }
-                }
-            }, 10000);
-        }
-        
-        public synchronized void registerChoice(User user, int zone) {
-            if (user.equals(currentShooter)) {
-                if (shooterChoice == null) {
-                    shooterChoice = zone;
-                    System.out.println(currentShooter.getUsername() + " chose zone: " + zone);
-                }
-            } else if (user.equals(currentKeeper)) {
-                if (keeperChoice == null) {
-                    keeperChoice = zone;
-                    System.out.println(currentKeeper.getUsername() + " chose zone: " + zone);
-                }
-            }
-            
-            // If both choices received, process immediately
-            if (shooterChoice != null && keeperChoice != null) {
-                processTurn();
-            }
-        }
-        
-        private void processTurn() {
-            // Determine if goal or save
-            boolean isGoal = (shooterChoice != keeperChoice);
-            
-            // Update score
-            if (isGoal) {
-                if (currentShooter.equals(player1)) {
-                    player1Score++;
-                } else {
-                    player2Score++;
-                }
-            }
-            
-            System.out.println("Result: Shooter zone " + shooterChoice + ", Keeper zone " + keeperChoice + " -> " + (isGoal ? "GOAL" : "SAVE"));
-            System.out.println("Score: " + User1.getUsername() + " " + player1Score + " - " + player2Score + " " + player2.getUsername());
-            
-            // Send result to both players
-            // Format: TURN_RESULT|shooterZone|keeperZone|isGoal|myScore|opponentScore|shooterName
-            String resultP1 = "TURN_RESULT|" + shooterChoice + "|" + keeperChoice + "|" + isGoal + "|" + 
-                            player1Score + "|" + player2Score + "|" + currentShooter.getUsername();
-            String resultP2 = "TURN_RESULT|" + shooterChoice + "|" + keeperChoice + "|" + isGoal + "|" + 
-                            player2Score + "|" + player1Score + "|" + currentShooter.getUsername();
-            
-            server.sendToPlayer(player1, resultP1);
-            server.sendToPlayer(player2, resultP2);
-            
-            // Wait for animation to finish
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            
-            // Swap shooter and keeper for next turn
-            User temp = currentShooter;
-            currentShooter = currentKeeper;
-            currentKeeper = temp;
-            
-            // After both players have had a turn, increment round
-            // User who started second will shoot again = new round starts
-            if (currentShooter.equals(player1) ? currentRound > 1 : currentRound >= 1) {
-                currentRound++;
-            }
-            
-            // Check if we've completed all rounds
-            if (currentRound > maxRounds) {
-                checkMatchEnd();
-            } else {
-                startTurn();
-            }
-        }
-        
-        private void checkMatchEnd() {
-            // After 5 rounds (10 turns), check winner
-            if (player1Score > player2Score) {
-                endMatch(player1);
-            } else if (player2Score > player1Score) {
-                endMatch(player2);
-            } else {
-                // Tied - sudden death
-                System.out.println("Match tied! Going to sudden death...");
-                maxRounds++;
-                startTurn();
-            }
-        }
-        
-        private void endMatch(User winner) {
-            System.out.println("Match ended! Winner: " + winner.getUsername());
-            
-            // Notify both players
-            server.sendToPlayer(player1, "MATCH_END|" + winner.getUsername() + "|" + 
-                              player1Score + "|" + player2Score);
-            server.sendToPlayer(player2, "MATCH_END|" + winner.getUsername() + "|" + 
-                              player2Score + "|" + player1Score);
-            
-            // Clean up
-            player1.setMatchId(null);
-            player2.setMatchId(null);
-            activeMatches.remove(matchId);
-        }
-        
-        public void handleDisconnect(User disconnectedPlayer) {
-            User otherPlayer = disconnectedPlayer.equals(player1) ? player2 : player1;
-            
-            // Notify other user
-            server.sendToPlayer(otherPlayer, "OPPONENT_DISCONNECTED");
-            
-            // End match
-            System.out.println("User " + disconnectedPlayer.getUsername() + " disconnected from match");
-            
-            otherPlayer.setMatchId(null);
-        }
-    }
     private static MatchDAO matchDAO = new MatchDAO();
     private static MatchResultDAO mrDAO = new MatchResultDAO();
     private static UserDAO userDAO = new UserDAO();
     private static PenaltyShotDAO psDAO = new PenaltyShotDAO();
-
-    
-    
-    public static void startMatch(String enermyUsername, User selfUser) {
-        ClientHandler enermyHandler = SessionManager.getSession(enermyUsername);
-        ClientHandler selfHandler = SessionManager.getSession(selfUser.getUsername());
-        
-        try {
-            
-            // create match
-            Match match = new Match(selfUser.getUserId());
-            
-            // get id from match
-            int matchId = matchDAO.createMatch(selfUser.getUserId());
-            
-            // create 2 match result for 2 player 
-            MatchResult mr1 = new MatchResult(matchId, selfUser.getUserId());
-            MatchResult mr2 = new MatchResult(matchId, userDAO.getUserIdByUsername(enermyUsername));
-            
-            // add player information to matchsult
-            mrDAO.addPlayerToMatch(mr1.getMatchId(), mr1.getUserId());
-            mrDAO.addPlayerToMatch(mr2.getMatchId(), mr2.getUserId());
-            
-            // send command to 2 player
-            // sent message for 2 player to start game
-            enermyHandler.sendMessage("START_MATCH:" + matchId);
-            selfHandler.sendMessage("START_MATCH:" + matchId);
-        }
-        catch(Exception e) {
-            e.printStackTrace();
-        }
-    }
-
 }

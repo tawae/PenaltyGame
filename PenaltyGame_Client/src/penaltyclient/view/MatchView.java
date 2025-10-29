@@ -58,41 +58,62 @@ public class MatchView extends Application {
     }
     
     @Override
-    public void start(Stage primaryStage) throws Exception {
-        primaryStage.setTitle("Penalty Shootout");
-        
-        // Main container
+    public void start(Stage primaryStage) {
+        // 1. Lấy controller từ biến static
+        this.controller = MatchController.getStartingController();
+        if (this.controller == null) {
+            System.err.println("FATAL ERROR: MatchView started without a MatchController!");
+            // Hiển thị lỗi và đóng
+            Platform.runLater(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Could not initialize match. Controller not found.");
+                alert.showAndWait();
+                primaryStage.close();
+            });
+            return;
+        }
+
+        // 2. Báo cho controller biết instance View này đã được tạo
+        this.controller.registerViewInstance(this);
+
+        // 3. Xây dựng UI (code tạo VBox, Pane, HBox, etc. như cũ)
         VBox root = new VBox();
-//        root.setStyle("-fx-background-color: #87CEEB;");
-//changed to:
-        root.setStyle("-fx-background-color: linear-gradient(to bottom, #87CEEB, #90EE90);"); // Sky to grass gradient
-        
-        createGameView();        
+        root.setStyle("-fx-background-color: linear-gradient(to bottom, #87CEEB, #90EE90);");
+        createGameView();
         HBox bottomUI = createBottomUI();
-        
         root.getChildren().addAll(gamePane, bottomUI);
-        VBox.setVgrow(gamePane, Priority.ALWAYS); // Cho gamePane chiếm hết không gian thừa
-        
+        VBox.setVgrow(gamePane, Priority.ALWAYS);
+
+        // 4. Tạo Scene và thiết lập Stage
         Scene scene = new Scene(root, SCENE_WIDTH, SCENE_HEIGHT);
-        setupControls(scene);
-        
+        setupControls(scene); // Thiết lập sự kiện phím
+
         primaryStage.setScene(scene);
+        primaryStage.setTitle("Penalty Shootout"); // Có thể lấy tên từ controller sau
         primaryStage.setResizable(false);
-        
+
+        // 5. Xử lý đóng cửa sổ (yêu cầu controller xử lý)
         primaryStage.setOnCloseRequest(e -> {
-             e.consume(); // Ngăn cửa sổ đóng ngay lập tức
-             Alert confirmExit = new Alert(Alert.AlertType.CONFIRMATION, "Are you sure you want to exit the match?");
-             confirmExit.showAndWait().ifPresent(response -> {
-                 if (response == ButtonType.OK) {
-                     if (controller != null) {
-                         controller.onWindowClose(); // Thông báo cho controller
-                     }
-                     primaryStage.close(); // Đóng cửa sổ
-                 }
-             });
-         });
-        
+            e.consume(); // Ngăn đóng ngay
+            if (controller != null) {
+                // Tạo dialog xác nhận thoát
+                Alert confirmExit = new Alert(Alert.AlertType.CONFIRMATION, "Are you sure you want to exit the match?");
+                confirmExit.initOwner(primaryStage);
+                confirmExit.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        controller.onWindowClose(); // Gọi controller để xử lý logic thoát
+                    }
+                });
+            } else {
+                primaryStage.close(); // Đóng nếu không có controller
+            }
+        });
+
+        // 6. Hiển thị Stage
         primaryStage.show();
+
+        System.out.println("MatchView started and UI initialized.");
+        // Controller sẽ cập nhật message sau
+        // updateMessage("Waiting for match start signal...");
     }
     
     private void createGameView() {
@@ -624,15 +645,15 @@ public class MatchView extends Application {
     public void resetField() {
         Platform.runLater(() -> {
             // Reset bóng về chấm penalty
-            ball.setCenterX(SCENE_WIDTH / 2);
-            ball.setCenterY(SCENE_HEIGHT * 0.4);
+            ball.setCenterX(450);
+            ball.setCenterY(350);
             ball.setRadius(12);
 
             // Reset vị trí thủ môn (về giữa và xóa translate)
             goalkeeperGroup.setTranslateX(0);
             goalkeeperGroup.setTranslateY(0);
-            goalkeeperBody.setCenterX(SCENE_WIDTH / 2); // Đặt lại gốc nếu cần
-            goalkeeperBody.setCenterY(SCENE_HEIGHT * 0.1 + SCENE_HEIGHT * 0.2 * 0.7);
+            goalkeeperBody.setCenterX(450); // Đặt lại gốc nếu cần SCENE_WIDTH / 2
+            goalkeeperBody.setCenterY(200); //SCENE_HEIGHT * 0.1 + SCENE_HEIGHT * 0.2 * 0.7
             updateGoalkeeperArms(); // Cập nhật lại tay về vị trí cũ
 
             // Reset zone styles và input
@@ -646,7 +667,7 @@ public class MatchView extends Application {
         });
     }
     
-    private void setupControls(Scene scene) {
+    public void setupControls(Scene scene) {
         scene.setOnKeyPressed(e -> {
             if (!inputEnabled) return;
             switch (e.getCode()) {
@@ -730,25 +751,47 @@ public class MatchView extends Application {
          return new Point((int)(zoneX + zoneWidth / 2), (int)(zoneY + zoneHeight / 2));
      }
     
-    public void showMatchEndMessage(String message) {
-         Platform.runLater(() -> {
-             Alert alert = new Alert(Alert.AlertType.INFORMATION);
-             alert.setTitle("Match Over");
-             alert.setHeaderText(null);
-             alert.setContentText(message);
-             alert.showAndWait();
-             // if(controller != null) controller.onWindowClose();
-         });
-     }
+    public void showMatchEndMessage(String message, Runnable afterDialogClosed) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Match Over");
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            // Lấy Stage hiện tại để làm owner
+            Stage ownerStage = (Stage) gamePane.getScene().getWindow();
+            if (ownerStage != null) {
+                alert.initOwner(ownerStage);
+            }
+            alert.showAndWait(); // Chờ người dùng đóng dialog
+
+            // Thực thi callback sau khi dialog đóng
+            if (afterDialogClosed != null) {
+                afterDialogClosed.run();
+            }
+        });
+    }
     
-    public void showErrorMessage(String message) {
+    public void showErrorMessage(String message, Runnable afterDialogClosed) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
             alert.setHeaderText(null);
             alert.setContentText(message);
+            // Lấy Stage hiện tại để làm owner
+            Stage ownerStage = (Stage) gamePane.getScene().getWindow();
+            if (ownerStage != null) {
+                alert.initOwner(ownerStage);
+            }
             alert.showAndWait();
+
+            // Thực thi callback sau khi dialog đóng
+            if (afterDialogClosed != null) {
+                afterDialogClosed.run();
+            }
         });
+    }
+    public void showErrorMessage(String message) {
+        showErrorMessage(message, null); // Gọi hàm mới với callback null
     }
     
 //    public static void main(String[] args) {

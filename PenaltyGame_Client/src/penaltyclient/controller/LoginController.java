@@ -1,38 +1,55 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package penaltyclient.controller;
-
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.stage.Stage; // Cần import Stage
 import penaltyclient.view.LoginView;
 import penaltyclient.model.SocketService;
+
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import penaltyclient.controller.LobbyController;
+
 import javax.swing.*;
 import java.io.*;
 import java.net.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-/**
- *
- * @author This PC
- */
-public class LoginController {
-    private LoginView loginView;
 
-    public LoginController() {
-        this.loginView = new LoginView(this);
+public class LoginController {
+
+    private LoginView loginView;
+    private Stage stage; // 1. Thêm biến để lưu Stage (cửa sổ)
+
+    public LoginController(Stage stage) {
+        this.stage = stage;
+        // Việc khởi tạo LoginView được chuyển vào hàm showLoginView()
     }
 
     public void showLoginView() {
-        this.loginView.setVisible(true);
+        // 3. Khởi tạo LoginView ở đây
+        this.loginView = new LoginView(this);
+        
+        // Tạo một Scene (cảnh) mới chứa giao diện của LoginView
+        Scene scene = new Scene(loginView.getView(), 350, 220);
+        // 4. Set Scene này cho Stage
+        stage.setTitle("Login");
+        stage.setScene(scene);
+        stage.setResizable(false);
+        stage.show();
     }
 
     public void hideLoginView() {
-        this.loginView.dispose();
+        stage.hide(); // Dùng stage để ẩn cửa sổ
     }
     
     public void login(String username, String password) {
+        if(username.isEmpty() || password.isEmpty()) {
+            showAlert(Alert.AlertType.ERROR, "Username and password must not be empty.");
+            return;
+        }
 
         try {
             SocketService.connect("localhost", 12345);
@@ -42,21 +59,39 @@ public class LoginController {
                     
             
             out.writeObject("LOGIN:" + username + ":" + password);
+            out.flush(); // Thêm flush để đảm bảo dữ liệu được gửi đi ngay
 
         // response
             String response = (String) in.readObject();
             if(response.equals("LOGIN_SUCCESS")) {
-                JOptionPane.showMessageDialog(loginView, "Login Success");
-                loginView.dispose();
-                new LobbyController(username);
+                // Sử dụng Alert của JavaFX thay vì JOptionPane
+                showAlert(Alert.AlertType.INFORMATION, "Login Success");
+                
+                // Khi login thành công, ta gọi LobbyController
+                // và truyền Stage qua cho nó
+                new LobbyController(username, stage, this).showLobbyView();
+
             }
             else {
-                JOptionPane.showMessageDialog(loginView, "Invalid information");
+                showAlert(Alert.AlertType.ERROR, "Invalid information");
             }
-        } catch (IOException ex) {
+        } catch (IOException | ClassNotFoundException ex) {
             Logger.getLogger(LoginController.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (ClassNotFoundException ex) {
-            Logger.getLogger(LoginController.class.getName()).log(Level.SEVERE, null, ex);
+            showAlert(Alert.AlertType.ERROR, "Could not connect to server: " + ex.getMessage());
         }   
+    }
+
+    private void showAlert(Alert.AlertType alertType, String message) {
+        Alert alert = new Alert(alertType);
+        alert.setTitle("Login Status");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        
+        // === SỬA LỖI: THÊM DÒNG NÀY ===
+        // Đặt cửa sổ chính (stage) làm chủ của Alert
+        alert.initOwner(stage);
+        // ============================
+        
+        alert.showAndWait();
     }
 }

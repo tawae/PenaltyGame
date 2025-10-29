@@ -2,6 +2,23 @@
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+<<<<<<< HEAD
+<<<<<<< HEAD
         <group/>
+=======
+        <group>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/model/MatchRecord.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/controller/LoginController.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/model/SocketService.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/model/RankingEntry.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/network/ClientNetwork.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/controller/LobbyController.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/view/LobbyView.java</file>
+            <file>file:/C:/Users/This%20PC/Documents/NetBeansProjects/BTL_LTM/PenaltyGame_Client/src/penaltyclient/model/ClientListener.java</file>
+        </group>
+>>>>>>> 349add7328287225046f2d2da0192d0b44a71f3e
+=======
+        <group/>
+>>>>>>> Trung
     </open-files>
 </project-private>

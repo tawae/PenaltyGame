@@ -1,22 +1,15 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package penaltyclient.model;
 
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.Socket;
 
-/**
- *
- * @author This PC
- */
 public class SocketService {
+
     private static Socket socket;
     private static ObjectOutputStream out;
     private static ObjectInputStream in;
-
     
     public static void connect(String host, int port) {
         try {
@@ -29,15 +22,31 @@ public class SocketService {
         }
     }
     
-    public static ObjectOutputStream getOutputStream() {
+    public static ObjectOutputStream getOutputStream() throws IOException {
+        if (out == null) {
+            throw new IOException("Socket is not connected or output stream is not initialized.");
+        }
         return out;
     }
 
-    public static ObjectInputStream getInputStream() {
+    public static ObjectInputStream getInputStream() throws IOException {
+        if (in == null) {
+            throw new IOException("Socket is not connected or input stream is not initialized.");
+        }
         return in;
     }
 
-    public static void close() throws IOException {
-        socket.close();
+    public static void close() {
+        try {
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (socket != null) socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            in = null;
+            out = null;
+            socket = null;
+        }
     }
 }

@@ -3,6 +3,10 @@ package penaltyclient.controller;
 import javafx.application.Platform;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import penaltyclient.view.MatchView;
 import javafx.stage.Stage;
@@ -10,18 +14,18 @@ import penaltyclient.model.ClientListener;
 //import network.ClientNetwork;
 
 public class MatchController {
+    private static MatchController currentlyStartingController = null;
     private MatchView matchView;
-
     private ClientListener clientListener;
     private LobbyController lobbyController;
     private Stage matchStage;
-    
+
     private String playerName;
     private String opponentName;
     
     // Game state
     private boolean isMyTurn = false;
-    private String myRole; // "SHOOTER" or "GOALKEEPER"
+    private String myRole = ""; // "SHOOTER" or "GOALKEEPER"
     private int myScore = 0;
     private int opponentScore = 0;
     private int currentRound = 1;
@@ -33,36 +37,82 @@ public class MatchController {
     private int selectedZone = -1;
     private boolean choiceConfirmed = false;
     
-    public MatchController(String matchId, String playerName, String opponentName, ClientListener clientListener) {
+    public MatchController(String playerName, String opponentName, ClientListener clientListener, LobbyController lobbyController) {
 //        this.matchView = view;
         this.clientListener = clientListener;
         this.playerName = playerName;
         this.opponentName = opponentName;
-        
+        this.lobbyController = lobbyController;
 //        matchView.setController(this);
     }
     
     public void showMatchView() {
-        matchStage = new Stage(); // Tạo cửa sổ mới
-        matchView = new MatchView(); // Tạo instance của MatchView (Application)
-        matchView.setController(this); // Liên kết View với Controller này
-        try {
-            matchView.start(matchStage); // Khởi chạy UI JavaFX trong cửa sổ mới
-            updateViewScores(); // Cập nhật điểm ban đầu
-            matchView.updateMessage("Waiting for match start...");
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Xử lý lỗi nếu không khởi tạo được View
-        }
+        // *** Quan trọng: Chạy trên JavaFX Thread ***
+        Platform.runLater(() -> {
+            try {
+                // 1. Gán controller hiện tại vào biến static TRƯỚC KHI start View
+                currentlyStartingController = this;
+
+                // 2. Tạo Stage mới cho trận đấu
+                matchStage = new Stage();
+
+                // 3. Khởi tạo và chạy MatchView trên Stage mới
+                // MatchView.start() sẽ tự động lấy controller từ biến static
+                matchView = new MatchView(); // Khởi tạo instance View
+                matchView.start(matchStage); // Gọi start() để View tự xây dựng UI
+
+                // 4. Reset biến static sau khi View đã start và lấy controller
+                currentlyStartingController = null;
+
+                // Cập nhật thông tin ban đầu (sau khi View đã hiển thị)
+                updateViewScores();
+                matchView.updateOpponentName(opponentName);
+                matchView.updateMessage("Waiting for match start signal...");
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                // Xử lý lỗi nghiêm trọng nếu không khởi tạo được View
+                showErrorAndClose("Failed to launch match window.");
+                // Reset biến static nếu lỗi
+                currentlyStartingController = null;
+            }
+        });
     }
-    private void closeMatchView() {
-        if (matchStage != null) {
-            matchStage.close();
-        }
-        
-        lobbyController.showLobbyView();
+    
+    public static MatchController getStartingController() {
+        return currentlyStartingController;
     }
 
+    // Gán instance MatchView thực tế sau khi nó được tạo
+    // Hàm này có thể được gọi từ bên trong MatchView.start()
+    public void registerViewInstance(MatchView viewInstance) {
+        this.matchView = viewInstance;
+        System.out.println("MatchController registered MatchView instance.");
+    }
+    
+    private void closeMatchViewAndReturnToLobby() {
+        Platform.runLater(() -> {
+            if (matchStage != null && matchStage.isShowing()) {
+                matchStage.close();
+            }
+            // Yêu cầu LobbyController hiển thị lại LobbyView
+            if (lobbyController != null) {
+                // Quan trọng: Báo cho ClientListener biết đã quay về lobby
+                if (clientListener != null) {
+                    clientListener.setLobbyController(lobbyController); // Chuyển listener về lobby
+                }
+                lobbyController.showLobbyView();
+            } else {
+                System.err.println("Error: LobbyController is null. Cannot return to lobby.");
+                // Có thể quay về Login hoặc đóng ứng dụng
+            }
+            // Đảm bảo MatchController này không còn hoạt động
+            if (clientListener != null) {
+                clientListener.clearMatchController(); // Thêm hàm này vào ClientListener
+            }
+        });
+    }
+    
     public void handleServerMessage(String message) {
         System.out.println("Nhan duoc tu server: " + message);
         String[] parts = message.split("\\:");
@@ -236,13 +286,13 @@ public class MatchController {
          // Hiển thị animation trên MatchView
          // Cần thêm các hàm này trong MatchView
          if (iWasShooter) {
-             matchView.playShootAnimation(shooterZone, keeperZone, isGoal, result -> {
+             matchView.playShootAnimation(shooterZone, keeperZone, isGoal, () -> {
                  showTurnResultMessage(isGoal, true); // Hiển thị thông báo sau anim
                  // Chờ server gửi TURN_START hoặc MATCH_END cho lượt tiếp theo
                  matchView.updateMessage("Waiting for next turn...");
              });
          } else { // I was the keeper
-             matchView.playGoalkeeperAnimation(shooterZone, keeperZone, isGoal, result -> {
+             matchView.playGoalkeeperAnimation(shooterZone, keeperZone, isGoal, () -> {
                  showTurnResultMessage(isGoal, false); // Hiển thị thông báo sau anim
                  // Chờ server gửi TURN_START hoặc MATCH_END cho lượt tiếp theo
                  matchView.updateMessage("Waiting for next turn...");
@@ -278,35 +328,48 @@ public class MatchController {
 
     // Hiển thị lỗi và đóng cửa sổ
     public void showErrorAndClose(String message) {
-        matchView.showErrorMessage(message);
-         // Có thể đóng cửa sổ ngay hoặc sau khi người dùng nhấn OK
-        closeMatchView();
+        // Hiển thị lỗi trên cửa sổ match (nếu còn) hoặc cửa sổ mới
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Match Error");
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            if (matchStage != null && matchStage.isShowing()) {
+                alert.initOwner(matchStage);
+            }
+            alert.showAndWait();
+            // Sau khi hiển thị lỗi, quay về Lobby
+            closeMatchViewAndReturnToLobby();
+        });
     }
     
     private void handleMatchEnd(String winner) {
         stopTurnTimer();
         isMyTurn = false;
-        matchView.disableInput();
-        updateViewScores(); // Cập nhật điểm cuối
+        if (matchView != null) { // Kiểm tra null
+            matchView.disableInput();
+            updateViewScores(); // Cập nhật điểm cuối
 
-        String resultMessage;
-        if (winner.equals(playerName)) {
-            resultMessage = "🎉 YOU WIN! 🎉\n" +
-                          "Final Score: " + myScore + " - " + opponentScore;
-        } else if (winner.equals("DRAW")) {
-            // Trường hợp này ít xảy ra nếu có sudden death, nhưng cứ xử lý
-            resultMessage = "🤝 IT'S A DRAW! 🤝\n" +
-                          "Final Score: " + myScore + " - " + opponentScore;
-        } else { // Đối thủ thắng
-             resultMessage = "😢 You Lost! 😢\n" +
-                           "Winner: " + opponentName + "\n" +
-                           "Final Score: " + myScore + " - " + opponentScore;
+            String resultMessage;
+            if (winner.equals(playerName)) {
+                resultMessage = "🎉 YOU WIN! 🎉\n" +
+                              "Final Score: " + myScore + " - " + opponentScore;
+            } else if (winner.equals("DRAW")) {
+                // Trường hợp này ít xảy ra nếu có sudden death, nhưng cứ xử lý
+                resultMessage = "🤝 IT'S A DRAW! 🤝\n" +
+                              "Final Score: " + myScore + " - " + opponentScore;
+            } else { // Đối thủ thắng
+                 resultMessage = "😢 You Lost! 😢\n" +
+                               "Winner: " + opponentName + "\n" +
+                               "Final Score: " + myScore + " - " + opponentScore;
+            }
+            matchView.showMatchEndMessage(resultMessage, () -> {
+                closeMatchViewAndReturnToLobby(); // Callback để quay về lobby sau khi đóng dialog
+            });
+        } else {
+            // Xử lý trường hợp view chưa sẵn sàng hoặc đã bị lỗi
+            closeMatchViewAndReturnToLobby();
         }
-
-        matchView.showMatchEndMessage(resultMessage); // Hiển thị dialog kết quả
-        // Có thể thêm nút "Play Again" hoặc "Back to Lobby" ở đây
-        // Sau khi người dùng đóng dialog, có thể đóng cửa sổ trận đấu
-        // closeMatchView(); // Hoặc chờ người dùng bấm nút nào đó
     }
     
     public void requestRematch() {
@@ -316,10 +379,16 @@ public class MatchController {
     private void handleOpponentDisconnected() {
         stopTurnTimer();
         isMyTurn = false;
-        matchView.disableInput();
-        showErrorAndClose("Opponent disconnected! You win by default.");
-        // Đóng cửa sổ sau khi hiển thị lỗi
-        // closeMatchView(); // Gọi sau khi người dùng nhấn OK trên dialog lỗi
+        if (matchView != null) { // Kiểm tra null
+            matchView.disableInput();
+            // Hiển thị lỗi, sau đó quay về lobby
+            matchView.showErrorMessage("Opponent disconnected! You win by default.", () -> {
+                closeMatchViewAndReturnToLobby(); // Callback để quay về lobby
+            });
+        } else {
+            // Xử lý trường hợp view chưa sẵn sàng hoặc đã bị lỗi
+            closeMatchViewAndReturnToLobby();
+        }
     }
     
     public void onWindowClose() {

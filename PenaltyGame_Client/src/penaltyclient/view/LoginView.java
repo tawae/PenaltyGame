@@ -1,87 +1,111 @@
-
 package penaltyclient.view;
+
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Parent;
+import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 import penaltyclient.controller.LoginController;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
-public class LoginView extends JFrame {
+public class LoginView { 
 
-    private JTextField txtUsername;
-    private JPasswordField txtPassword;
-    private JButton btnLogin;
-    private JButton btnExit;
+    private LoginController loginController;
+    private TextField txtUsername;
+    private PasswordField txtPassword;
+    private Button btnLogin;
+    private Button btnExit;
+    private GridPane grid;
 
-    /** Creates new form LoginView */
     public LoginView(LoginController loginController) {
-        setTitle("Login");
-        setSize(350, 200);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setResizable(false);
+        this.loginController = loginController;
+        createLoginPane(); 
+        addEventHandlers();
+    }
+
+    private void createLoginPane() {
+        grid = new GridPane();
+        grid.setAlignment(Pos.CENTER);
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(25, 25, 25, 25));
         
-        JPanel panel = new JPanel(new GridLayout(3,2,10,10));
-        panel.setBorder(BorderFactory.createEmptyBorder(20,20,20,20));
+        // === THÊM MÀU SẮC ===
+        // Đặt màu nền là màu xanh lá cây đậm (màu sân cỏ)
+        grid.setStyle("-fx-background-color: #2E7D32;"); // Bạn có thể đổi mã màu #2E7D32 thành màu khác
 
-        JLabel lbUsername = new JLabel("Username: ");
-        JLabel lbPassword = new JLabel("Password: ");
+        Text scenetitle = new Text("Welcome to Penalty Game");
+        scenetitle.setFont(Font.font("Tahoma", FontWeight.NORMAL, 20));
+        // Đặt màu chữ là màu trắng và in đậm
+        scenetitle.setStyle("-fx-fill: white; -fx-font-weight: bold;");
+        grid.add(scenetitle, 0, 0, 2, 1);
 
-        txtUsername = new JTextField();
-        txtPassword = new JPasswordField();
+        Label lbUsername = new Label("Username:");
+        // Đặt màu chữ là màu trắng
+        lbUsername.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        grid.add(lbUsername, 0, 1);
 
-        btnLogin = new JButton("Login");
-        btnExit = new JButton("Exit");
+        txtUsername = new TextField();
+        txtUsername.setPromptText("Enter your username");
+        // Đặt kiểu cho ô nhập liệu
+        txtUsername.setStyle("-fx-background-radius: 5;");
+        grid.add(txtUsername, 1, 1);
+
+        Label lbPassword = new Label("Password:");
+        // Đặt màu chữ là màu trắng
+        lbPassword.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        grid.add(lbPassword, 0, 2);
+        
+        txtPassword = new PasswordField();
+        txtPassword.setPromptText("Enter your password");
+        // Đặt kiểu cho ô nhập liệu
+        txtPassword.setStyle("-fx-background-radius: 5;");
+        grid.add(txtPassword, 1, 2);
 
 
-        panel.add(lbUsername);
-        panel.add(txtUsername);
-        panel.add(lbPassword);
-        panel.add(txtPassword);
-        panel.add(btnLogin);
-        panel.add(btnExit);
+        // Nút Login: Nền trắng, chữ xanh
+        btnLogin = new Button("Login");
+        btnLogin.setStyle(
+            "-fx-background-color: white; " +
+            "-fx-text-fill: #2E7D32; " + // Chữ màu xanh lá
+            "-fx-font-weight: bold; " +
+            "-fx-background-radius: 5;"
+        );
+        
+        // Nút Exit: Nền xám nhạt, chữ đen
+        btnExit = new Button("Exit");
+        btnExit.setStyle(
+            "-fx-background-color: #f0f0f0; " +
+            "-fx-text-fill: black; " +
+            "-fx-background-radius: 5;"
+        );
+        // =======================
 
-        add(panel);
+        HBox hbBtn = new HBox(10);
+        hbBtn.setAlignment(Pos.BOTTOM_RIGHT);
+        hbBtn.getChildren().addAll(btnLogin, btnExit);
+        grid.add(hbBtn, 1, 4);
+    }
 
-
-        btnLogin.addActionListener(e -> {
+    private void addEventHandlers() {
+        btnLogin.setOnAction(e -> {
             String user = txtUsername.getText();
-            String pass = new String(txtPassword.getPassword());
+            String pass = txtPassword.getText();
             loginController.login(user, pass);
         });
 
-        btnExit.addActionListener(e -> System.exit(0));
+        btnExit.setOnAction(e -> System.exit(0));
+
+        // Cho phép nhấn Enter để login
+        txtPassword.setOnAction(e -> btnLogin.fire());
+    }
+
+    public Parent getView() {
+        return grid;
     }
     
-    public void addLoginListener(ActionListener listener) {
-        btnLogin.addActionListener(listener);
-    }
-
-    /** This method is called from within the constructor to
-     * initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is
-     * always regenerated by the Form Editor.
-     */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
-    private void initComponents() {
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-
-        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 400, Short.MAX_VALUE)
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 300, Short.MAX_VALUE)
-        );
-        pack();
-    }
-    // </editor-fold>//GEN-END:initComponents
-
-    // Variables declaration - do not modify//GEN-BEGIN:variables
-    // End of variables declaration//GEN-END:variables
-
+    // Không cần hàm initComponents() của Swing ở đây
 }
