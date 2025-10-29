@@ -37,7 +37,4 @@ public class Match {
     public void setCreatedBy(int createdBy) {
         this.createdBy = createdBy;
     }
-    
-    
-    
 }

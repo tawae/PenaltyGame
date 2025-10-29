@@ -18,10 +18,15 @@ public class SocketService {
     private static ObjectInputStream in;
 
     
-    public static void connect(String host, int port) throws IOException {
-        socket = new Socket(host, port);
-        out = new ObjectOutputStream(socket.getOutputStream());
-        in = new ObjectInputStream(socket.getInputStream());
+    public static void connect(String host, int port) {
+        try {
+            socket = new Socket(host, port);
+            out = new ObjectOutputStream(socket.getOutputStream());
+            in = new ObjectInputStream(socket.getInputStream());
+            System.out.println("Connected to: " + host + ": " + port);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
     
     public static ObjectOutputStream getOutputStream() {

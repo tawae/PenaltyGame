@@ -52,37 +52,32 @@ public class ClientHandler extends Thread {
                     String command = parts[0];
                     
                     switch(command) {
-//                        case "LOGIN": {
-//                            this.username = parts[1];
-//                            String password = parts[2];
-//                            user = new User(username, password);
-//            
-//                            if (AuthController.checkLogin(user)) {
-//                                SessionManager.addSession(username, this);
-//                                out.writeObject("SUCCESS");
-//                                out.flush();
-//                            } else {
-//                                out.writeObject("LOGIN_FAIL");
-//                                out.flush();
-//                                return;
-//                            }
-//                            break;
-//
-//                        }
-                                                    
+                        case "LOGIN": {
+                            this.username = parts[1];
+                            String password = parts[2];
+                            user = new User(username, password);
+            
+                            if (AuthController.checkLogin(user)) {
+                                SessionManager.addSession(username, this);
+                                out.writeObject("LOGIN_SUCCESS");
+                                out.flush();
+                            } else {
+                                out.writeObject("LOGIN_FAIL");
+                                out.flush();
+                                return;
+                            }
+                            break;
+
+                        }                     
                         case "LOGOUT": {
                             SessionManager.removeSession(username);
-                            System.out.println(username + "đăng xuất.");
+                            System.out.println(username + "dang xuat");
                             break;
                         }
-                            
-                        
                         case "GET_ONLINE_USERS":
                             LobbyController.handleSendOnlineUsers(out);
                             System.out.println(username + "đang online");
                             break;
-                            
-                            
                         case "INVITE":
                             String targetUsername = parts[1];
                             LobbyController.handleInviteB(targetUsername, this, username);
@@ -119,29 +114,13 @@ public class ClientHandler extends Thread {
         }
         
     }
-    
-
-    public void sendMessage(String message) {
+    public void sendMessage(String msg) {
         try {
-            if (socket != null && !socket.isClosed()) {
-                out.writeObject(message);
-                out.flush();
-            } else {
-                System.out.println(
-                        "Socket đã đóng, không thể gửi tới " + (user != null ? user.getUsername() : "client"));
-            }
-        } catch (IOException e) {
-            System.out.println(
-                    "Lỗi khi gửi tới " + (user != null ? user.getUsername() : "client") + ": " + e.getMessage());
-            // Không gọi lại handleLogout() ở đây để tránh đệ quy
-            // Đánh dấu client là đã ngắt kết nối
-            try {
-                socket.close();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            this.out.writeObject(msg);
+            this.out.flush();
         }
-    }
-    
-    
+        catch(Exception e) {
+            e.printStackTrace();
+        }
+    }   
 }

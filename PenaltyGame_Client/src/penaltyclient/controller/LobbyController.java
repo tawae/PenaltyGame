@@ -13,6 +13,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import penaltyclient.model.ClientListener;
 import penaltyclient.model.SocketService;
+import penaltyclient.controller.MatchController;
+import javafx.application.Platform;
 /**
  *
  * @author This PC
@@ -26,17 +28,19 @@ public class LobbyController {
     private LoginController loginController;
     private ObjectOutputStream out = SocketService.getOutputStream();
     private ObjectInputStream in = SocketService.getInputStream();
+    private ClientListener clientListener;
 
     private String username;
 
     public LobbyController(String username) {
-        this.lobbyView = new LobbyView(username);
+
+        this.lobbyView = new LobbyView(username, this);
         this.lobbyView.setVisible(true);
         this.loginController = new LoginController();
         this.username = username;
+        this.clientListener = new ClientListener(this); // Tạo listener cho lobby
+        new Thread(this.clientListener).start();
         this.loadPlayers();
-        
-        new Thread(new ClientListener(this)).start();
     }
     public void showLobbyView() {
         this.lobbyView.setVisible(true);
@@ -46,8 +50,6 @@ public class LobbyController {
     }
 
     public void loadPlayers() {
-        
-
         try {   
             // gui yeu cau lay onlineusers
             out.writeObject("GET_ONLINE_USERS");
@@ -77,8 +79,6 @@ public class LobbyController {
         this.lobbyView = lobbyView;
     }
     
-    
-        
     public void handleLogout() {
         try {
             out.writeObject("LOGOUT");
@@ -109,9 +109,4 @@ public class LobbyController {
     public void setUsername(String username) {
         this.username = username;
     }
-    
-    
-    
-    
-    
 }

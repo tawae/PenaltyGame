@@ -36,5 +36,4 @@ public class SessionManager {
     public static boolean isOnline(String username) {
         return sessions.containsKey(username);
     }
-
 }

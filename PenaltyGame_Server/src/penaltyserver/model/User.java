@@ -7,17 +7,14 @@
 package penaltyserver.model;
 import java.io.*;
 import java.net.*;
-/**
- *
- * @author This PC
- */
+
 public class User {
     private Socket socket;
     private int choice = -1;
     private int userId;
     private String username;
     private String password;
-
+    
     public int getUserId() {
         return userId;
     }

@@ -60,7 +60,5 @@ public class MatchResult {
     public void setIsWinner(boolean isWinner) {
         this.isWinner = isWinner;
     }
-    
-    
-    
+
 }

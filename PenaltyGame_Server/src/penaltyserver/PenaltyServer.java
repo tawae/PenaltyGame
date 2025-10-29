@@ -29,5 +29,5 @@ public class PenaltyServer {
         }catch(IOException e) {
             e.printStackTrace();
         }
-    }  
+    }
 }

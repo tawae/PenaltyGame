@@ -21,10 +21,8 @@ public class LobbyView extends JFrame {
     private JTable tblPlayers;
     private DefaultTableModel tableModel;
     private LobbyController lobbyController;
-    private LobbyController controller;
 
 
-    /** Creates new form LobbyView */
     public LobbyView(String username) {
         setTitle("Lobby");
         setSize(600, 400);

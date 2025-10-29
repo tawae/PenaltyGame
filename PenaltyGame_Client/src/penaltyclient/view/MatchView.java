@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 
 package penaltyclient.view;
 
@@ -24,6 +19,9 @@ import javafx.scene.transform.Rotate;
 import javafx.scene.transform.Scale;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.scene.*;
+import java.util.*;
+import javafx.scene.control.ButtonType;
 
 import penaltyclient.controller.MatchController;
 
@@ -36,44 +34,70 @@ public class MatchView extends Application {
     private Pane gamePane;
     private Rectangle[] goalZones = new Rectangle[6];
     private Circle ball;
+    private Group goalkeeperGroup;
+    private Ellipse goalkeeperBody;
+    private Line leftArm, rightArm;
+    
     private Ellipse goalkeeper;
+    
     private Label scoreLabel;
     private Label messageLabel;
-    private Button shootButton;
+    private Button confirmButton;
+    private Label timerLabel;
+    private Label opponentNameLabel;
     
     private boolean inputEnabled = false;
     private int selectedZone = -1;
-    private int goals = 0;
-    private int attempts = 0;
     
     private MatchController controller;
     private String playerName;
     private String opponentName;
     
+    public void setController (MatchController controller) {
+        this.controller = controller;
+    }
+    
     @Override
-    public void start(Stage primaryStage) {
-        primaryStage.setTitle("Penalty Shootout - Football Game");
+    public void start(Stage primaryStage) throws Exception {
+        primaryStage.setTitle("Penalty Shootout");
         
         // Main container
         VBox root = new VBox();
-        root.setStyle("-fx-background-color: #87CEEB;");
+//        root.setStyle("-fx-background-color: #87CEEB;");
+//changed to:
+        root.setStyle("-fx-background-color: linear-gradient(to bottom, #87CEEB, #90EE90);"); // Sky to grass gradient
         
         createGameView();        
         HBox bottomUI = createBottomUI();
         
         root.getChildren().addAll(gamePane, bottomUI);
+        VBox.setVgrow(gamePane, Priority.ALWAYS); // Cho gamePane chiếm hết không gian thừa
         
         Scene scene = new Scene(root, SCENE_WIDTH, SCENE_HEIGHT);
         setupControls(scene);
         
         primaryStage.setScene(scene);
         primaryStage.setResizable(false);
+        
+        primaryStage.setOnCloseRequest(e -> {
+             e.consume(); // Ngăn cửa sổ đóng ngay lập tức
+             Alert confirmExit = new Alert(Alert.AlertType.CONFIRMATION, "Are you sure you want to exit the match?");
+             confirmExit.showAndWait().ifPresent(response -> {
+                 if (response == ButtonType.OK) {
+                     if (controller != null) {
+                         controller.onWindowClose(); // Thông báo cho controller
+                     }
+                     primaryStage.close(); // Đóng cửa sổ
+                 }
+             });
+         });
+        
         primaryStage.show();
     }
     
     private void createGameView() {
         gamePane = new Pane();
-        gamePane.setPrefSize(SCENE_WIDTH, SCENE_HEIGHT - 100);
+//        gamePane.setPrefSize(SCENE_WIDTH, SCENE_HEIGHT - 100);
         
         // Sky background (1/3 of screen)
         Rectangle sky = new Rectangle(0, 0, SCENE_WIDTH, 200);
@@ -154,7 +178,6 @@ public class MatchView extends Application {
         // Penalty spot (chấm phạt đền) - đặt trong vòng cấm
         Circle penaltySpot = new Circle(450, 350, 5);  // đưa lên trong penaltyArea
         penaltySpot.setFill(Color.WHITE);
-
         // Penalty arc (nửa vòng tròn) - nằm ngoài vòng cấm
         Arc penaltyArc = new Arc(450, 400, 100, 60, 0, -180); 
         // tâm đặt ở chính giữa vạch 16m50 (y = 250), vẽ ra ngoài
@@ -186,7 +209,7 @@ public class MatchView extends Application {
         rightPost.setStrokeWidth(1);
         
         // Crossbar
-        Rectangle crossbar = new Rectangle(goalX, goalY - 5, goalWidth, 10);
+        Rectangle crossbar = new Rectangle(goalX - 5, goalY - 5, goalWidth + 10, 10);
         crossbar.setFill(Color.WHITE);
         crossbar.setStroke(Color.GRAY);
         crossbar.setStrokeWidth(1);
@@ -278,10 +301,14 @@ public class MatchView extends Application {
     
     private void createGoalkeeper() {
         // Goalkeeper in center of goal
-        goalkeeper = new Ellipse(450, 200, 15, 20);
-        goalkeeper.setFill(Color.ORANGE);
-        goalkeeper.setStroke(Color.DARKORANGE);
-        goalkeeper.setStrokeWidth(2);
+        goalkeeperBody = new Ellipse(450, 200, 15, 20);
+//        goalkeeperBody = new Ellipse(SCENE_WIDTH / 2, SCENE_HEIGHT * 0.1 + SCENE_HEIGHT * 0.2 * 0.7, 15, 25);
+//        goalkeeper.setFill(Color.ORANGE);
+//        goalkeeper.setStroke(Color.DARKORANGE);
+//        goalkeeper.setStrokeWidth(2);
+        goalkeeperBody.setFill(Color.ORANGE);
+        goalkeeperBody.setStroke(Color.DARKORANGE);
+        goalkeeperBody.setStrokeWidth(2);
         
         // Arms
         Line leftArm = new Line(435, 200, 420, 190);
@@ -292,7 +319,20 @@ public class MatchView extends Application {
         rightArm.setStroke(Color.ORANGE);
         rightArm.setStrokeWidth(3);
         
-        gamePane.getChildren().addAll(goalkeeper, leftArm, rightArm);
+        gamePane.getChildren().addAll(goalkeeperBody, leftArm, rightArm);
+    }
+    
+    private void updateGoalkeeperArms() {
+        double bodyX = goalkeeperBody.getCenterX();
+        double bodyY = goalkeeperBody.getCenterY();
+        leftArm.setStartX(bodyX);
+        leftArm.setStartY(bodyY);
+        leftArm.setEndX(bodyX - 20); // Tay dang ra
+        leftArm.setEndY(bodyY - 10);
+        rightArm.setStartX(bodyX);
+        rightArm.setStartY(bodyY);
+        rightArm.setEndX(bodyX + 20); // Tay dang ra
+        rightArm.setEndY(bodyY - 10);
     }
     
     private void createBall() {
@@ -321,22 +361,27 @@ public class MatchView extends Application {
         bottomPanel.setPrefHeight(100);
         
         // Score display
-        scoreLabel = new Label("Score: 0/0");
+        scoreLabel = new Label("Score: 0 - 0");
         scoreLabel.setFont(Font.font("Arial", FontWeight.BOLD, 18));
         scoreLabel.setTextFill(Color.WHITE);
         
         // Shoot button
-        shootButton = new Button("SHOOT!");
-        shootButton.setPrefSize(120, 40);
-        shootButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
-        shootButton.setStyle(
+        confirmButton = new Button("SHOOT!");
+        confirmButton.setPrefSize(120, 40);
+        confirmButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+        confirmButton.setStyle(
             "-fx-background-color: #4CAF50; " +
             "-fx-text-fill: white; " +
             "-fx-background-radius: 5; " +
             "-fx-cursor: hand;"
         );
 //        shootButton.setOnAction(e -> showErrorMessage("clicked"));
-        shootButton.setOnAction(e -> performShoot());
+        confirmButton.setOnAction(e -> {
+            if (inputEnabled && controller != null) {
+                controller.onConfirmChoice();
+            }
+        });
+        confirmButton.setDisable(true);
         
         // Message label
         messageLabel = new Label("Click on a goal zone to shoot!");
@@ -344,7 +389,7 @@ public class MatchView extends Application {
         messageLabel.setTextFill(Color.YELLOW);
         messageLabel.setMinWidth(250);
                
-        bottomPanel.getChildren().addAll(scoreLabel, shootButton, messageLabel);
+        bottomPanel.getChildren().addAll(scoreLabel, confirmButton, messageLabel);
         
         return bottomPanel;
     }
@@ -369,120 +414,246 @@ public class MatchView extends Application {
         messageLabel.setTextFill(Color.LIME);
     }
     
-    private void performShoot() {
-        if (selectedZone == -1) {
-            messageLabel.setText("Please select a target zone first!");
-            messageLabel.setTextFill(Color.RED);
+    public void highlightSelectedZone(int index) {
+        if (index < 0 || index >= 6) {
             return;
         }
-        
-        attempts++;
-        
-        // Calculate target position
-        double goalX = 300;
-        double goalY = 150;
-        double zoneWidth = 300.0 / 3;
-        double zoneHeight = 100.0 / 2;
-        
-        int row = selectedZone / 3;
-        int col = selectedZone % 3;
-        
-        double targetX = goalX + col * zoneWidth + zoneWidth / 2;
-        double targetY = goalY + row * zoneHeight + zoneHeight / 2;
-        
-        // Add some randomness
-        targetX += (Math.random() - 0.5) * 20;
-        targetY += (Math.random() - 0.5) * 10;
-        
-        // Ball shooting animation
-        Timeline shootAnimation = new Timeline();
-        
-        KeyFrame start = new KeyFrame(Duration.ZERO,
-            new KeyValue(ball.centerXProperty(), 450),
-            new KeyValue(ball.centerYProperty(), 350),
-            new KeyValue(ball.radiusProperty(), 12)
-        );
-        
-        KeyFrame mid = new KeyFrame(Duration.millis(300),
-            new KeyValue(ball.centerXProperty(), targetX),
-            new KeyValue(ball.centerYProperty(), targetY - 30),
-            new KeyValue(ball.radiusProperty(), 8)
-        );
-        
-        KeyFrame end = new KeyFrame(Duration.millis(600),
-            new KeyValue(ball.centerXProperty(), targetX),
-            new KeyValue(ball.centerYProperty(), targetY),
-            new KeyValue(ball.radiusProperty(), 6)
-        );
-        
-        shootAnimation.getKeyFrames().addAll(start, mid, end);
-        
-        // Goalkeeper animation
-        boolean saved = Math.random() < 0.3; // 30% save chance
-        
-        if (saved) {
-            double keeperX = targetX;
-            Timeline keeperAnimation = new Timeline(
-                new KeyFrame(Duration.millis(400),
-                    new KeyValue(goalkeeper.centerXProperty(), keeperX)
-                )
-            );
-            keeperAnimation.play();
-        }
-        
-        shootAnimation.setOnFinished(e -> {
-            if (!saved) {
-                goals++;
-                messageLabel.setText("GOAL! Great shot!");
-                messageLabel.setTextFill(Color.LIME);
+        selectedZone = index; // Lưu lại zone đang được chọn
+        for (int i = 0; i < 6; i++) {
+            if (i == index) {
+                goalZones[i].setFill(Color.rgb(0, 255, 0, 0.4)); // Màu xanh lá cây đậm hơn
+                goalZones[i].setStroke(Color.LIME);
+                goalZones[i].setOpacity(0.8);
+                goalZones[i].getStrokeDashArray().clear(); // Nét liền
             } else {
-                messageLabel.setText("SAVED! The goalkeeper stopped it!");
-                messageLabel.setTextFill(Color.RED);
+                resetZoneStyle(i); // Reset các ô khác
             }
-            
-            scoreLabel.setText("Score: " + goals + "/" + attempts);
-            
-            // Reset after delay
-            PauseTransition pause = new PauseTransition(Duration.seconds(2));
-            pause.setOnFinished(ev -> resetField());
-            pause.play();
+        }
+        confirmButton.setDisable(false); // Cho phép nhấn Confirm
+    }
+    
+//    
+//    private void performShoot() {
+//        if (selectedZone == -1) {
+//            messageLabel.setText("Please select a target zone first!");
+//            messageLabel.setTextFill(Color.RED);
+//            return;
+//        }
+//        
+//        attempts++;
+//        
+//        // Calculate target position
+//        double goalX = 300;
+//        double goalY = 150;
+//        double zoneWidth = 300.0 / 3;
+//        double zoneHeight = 100.0 / 2;
+//        
+//        int row = selectedZone / 3;
+//        int col = selectedZone % 3;
+//        
+//        double targetX = goalX + col * zoneWidth + zoneWidth / 2;
+//        double targetY = goalY + row * zoneHeight + zoneHeight / 2;
+//        
+//        // Add some randomness
+//        targetX += (Math.random() - 0.5) * 20;
+//        targetY += (Math.random() - 0.5) * 10;
+//        
+//        // Ball shooting animation
+//        Timeline shootAnimation = new Timeline();
+//        
+//        KeyFrame start = new KeyFrame(Duration.ZERO,
+//            new KeyValue(ball.centerXProperty(), 450),
+//            new KeyValue(ball.centerYProperty(), 350),
+//            new KeyValue(ball.radiusProperty(), 12)
+//        );
+//        
+//        KeyFrame mid = new KeyFrame(Duration.millis(300),
+//            new KeyValue(ball.centerXProperty(), targetX),
+//            new KeyValue(ball.centerYProperty(), targetY - 30),
+//            new KeyValue(ball.radiusProperty(), 8)
+//        );
+//        
+//        KeyFrame end = new KeyFrame(Duration.millis(600),
+//            new KeyValue(ball.centerXProperty(), targetX),
+//            new KeyValue(ball.centerYProperty(), targetY),
+//            new KeyValue(ball.radiusProperty(), 6)
+//        );
+//        
+//        shootAnimation.getKeyFrames().addAll(start, mid, end);
+//        
+//        // Goalkeeper animation
+//        boolean saved = Math.random() < 0.3; // 30% save chance
+//        
+//        if (saved) {
+//            double keeperX = targetX;
+//            Timeline keeperAnimation = new Timeline(
+//                new KeyFrame(Duration.millis(400),
+//                    new KeyValue(goalkeeper.centerXProperty(), keeperX)
+//                )
+//            );
+//            keeperAnimation.play();
+//        }
+//        
+//        shootAnimation.setOnFinished(e -> {
+//            if (!saved) {
+//                goals++;
+//                messageLabel.setText("GOAL! Great shot!");
+//                messageLabel.setTextFill(Color.LIME);
+//            } else {
+//                messageLabel.setText("SAVED! The goalkeeper stopped it!");
+//                messageLabel.setTextFill(Color.RED);
+//            }
+//            
+//            scoreLabel.setText("Score: " + goals + "/" + attempts);
+//            
+//            // Reset after delay
+//            PauseTransition pause = new PauseTransition(Duration.seconds(2));
+//            pause.setOnFinished(ev -> resetField());
+//            pause.play();
+//        });
+//        
+//        shootAnimation.play();
+//    }
+    
+    private void resetZoneStyle(int index) {
+        if (index < 0 || index >= 6) {
+            return;
+        }
+        goalZones[index].setFill(Color.TRANSPARENT);
+        goalZones[index].setStroke(Color.YELLOW);
+        goalZones[index].setOpacity(0.4);
+        goalZones[index].getStrokeDashArray().setAll(5d, 5d); // Nét đứt
+    }
+
+    public void updateTimer(int seconds) {
+        Platform.runLater(() -> {
+            if (seconds >= 0) {
+                timerLabel.setText("Time: " + String.format("%02d", seconds));
+            } else {
+                timerLabel.setText("Time: --"); // Hết giờ hoặc không đếm
+            }
         });
-        
-        shootAnimation.play();
+    }
+
+    public void updateOpponentName(String name) {
+        Platform.runLater(() -> opponentNameLabel.setText("Opponent: " + name));
+    }
+    
+    public void playShootAnimation(int shooterZone, int keeperZone, boolean isGoal, Runnable onFinish) {
+        Platform.runLater(() -> {
+            // Tính toán vị trí đích của bóng dựa vào shooterZone
+            Point targetPoint = getZoneCenter(shooterZone);
+            double targetX = targetPoint.x;
+            double targetY = targetPoint.y;
+
+            // Animation di chuyển và thu nhỏ bóng
+            Timeline ballAnimation = new Timeline(
+                    new KeyFrame(Duration.ZERO,
+                            new KeyValue(ball.centerXProperty(), ball.getCenterX()), // Vị trí hiện tại
+                            new KeyValue(ball.centerYProperty(), ball.getCenterY()),
+                            new KeyValue(ball.radiusProperty(), 12)),
+                    new KeyFrame(Duration.millis(500), // Thời gian bay
+                            new KeyValue(ball.centerXProperty(), targetX),
+                            new KeyValue(ball.centerYProperty(), targetY),
+                            new KeyValue(ball.radiusProperty(), 8)) // Bóng nhỏ lại khi vào gôn
+            );
+
+            // Animation thủ môn (chỉ chạy nếu không phải là bàn thắng)
+            if (!isGoal) {
+                Point keeperTarget = getZoneCenter(keeperZone); // Thủ môn bay đến ô đã chọn
+                animateGoalkeeper(keeperTarget.x, keeperTarget.y);
+            }
+
+            ballAnimation.setOnFinished(e -> {
+                // Có thể thêm hiệu ứng (lưới rung, bóng bật ra...)
+                if (onFinish != null) {
+                    // Delay một chút trước khi gọi onFinish để người dùng kịp nhìn kết quả
+                    PauseTransition pause = new PauseTransition(Duration.millis(500));
+                    pause.setOnFinished(event -> onFinish.run());
+                    pause.play();
+                }
+            });
+            ballAnimation.play();
+        });
+    }
+    
+    public void playGoalkeeperAnimation(int shooterZone, int keeperZone, boolean isGoal, Runnable onFinish) {
+        Platform.runLater(() -> {
+            // Thủ môn sẽ bay đến ô keeperZone đã chọn
+            Point keeperTarget = getZoneCenter(keeperZone);
+            animateGoalkeeper(keeperTarget.x, keeperTarget.y);
+
+            // Bóng cũng bay đến ô shooterZone
+            Point ballTarget = getZoneCenter(shooterZone);
+            Timeline ballAnimation = new Timeline(
+                    new KeyFrame(Duration.ZERO,
+                            new KeyValue(ball.centerXProperty(), ball.getCenterX()),
+                            new KeyValue(ball.centerYProperty(), ball.getCenterY()),
+                            new KeyValue(ball.radiusProperty(), 12)),
+                    new KeyFrame(Duration.millis(500),
+                            new KeyValue(ball.centerXProperty(), ballTarget.x),
+                            new KeyValue(ball.centerYProperty(), ballTarget.y),
+                            new KeyValue(ball.radiusProperty(), 8))
+            );
+
+            ballAnimation.setOnFinished(e -> {
+                // Delay chút rồi gọi onFinish
+                PauseTransition pause = new PauseTransition(Duration.millis(500));
+                pause.setOnFinished(event -> onFinish.run());
+                pause.play();
+            });
+            ballAnimation.play();
+
+        });
+    }
+    
+    private void animateGoalkeeper(double targetX, double targetY) {
+        // Animation di chuyển cả nhóm thủ môn
+        TranslateTransition tt = new TranslateTransition(Duration.millis(400), goalkeeperGroup);
+        // Tính toán độ dịch chuyển cần thiết từ vị trí hiện tại
+        double currentX = goalkeeperGroup.getTranslateX() + goalkeeperBody.getCenterX(); // Vị trí gốc + dịch chuyển hiện tại
+        double currentY = goalkeeperGroup.getTranslateY() + goalkeeperBody.getCenterY();
+        tt.setByX(targetX - currentX); // Dịch chuyển thêm để đạt target
+        tt.setByY(targetY - currentY);
+        tt.setInterpolator(Interpolator.EASE_OUT); // Di chuyển mượt
+
+        // Có thể thêm animation tay dang rộng ra khi bay
+        tt.play();
     }
     
     public void resetField() {
-        // Reset ball
-        ball.setCenterX(450);
-        ball.setCenterY(350);
-        ball.setRadius(12);
-        
-        // Reset goalkeeper
-        goalkeeper.setCenterX(450);
-        
-        // Clear selection
-        selectedZone = -1;
-        for (Rectangle zone : goalZones) {
-            zone.setOpacity(0);
-            zone.setFill(Color.TRANSPARENT);
-            zone.setStroke(Color.YELLOW);
-        }
-        
-        messageLabel.setText("Click on a goal zone to shoot!");
-        messageLabel.setTextFill(Color.YELLOW);
+        Platform.runLater(() -> {
+            // Reset bóng về chấm penalty
+            ball.setCenterX(SCENE_WIDTH / 2);
+            ball.setCenterY(SCENE_HEIGHT * 0.4);
+            ball.setRadius(12);
+
+            // Reset vị trí thủ môn (về giữa và xóa translate)
+            goalkeeperGroup.setTranslateX(0);
+            goalkeeperGroup.setTranslateY(0);
+            goalkeeperBody.setCenterX(SCENE_WIDTH / 2); // Đặt lại gốc nếu cần
+            goalkeeperBody.setCenterY(SCENE_HEIGHT * 0.1 + SCENE_HEIGHT * 0.2 * 0.7);
+            updateGoalkeeperArms(); // Cập nhật lại tay về vị trí cũ
+
+            // Reset zone styles và input
+            selectedZone = -1;
+            confirmButton.setDisable(true);
+            inputEnabled = false; // Mặc định disable input sau mỗi lượt, chờ server cho phép
+            for (int i = 0; i < 6; i++) {
+                resetZoneStyle(i);
+                goalZones[i].setMouseTransparent(true); // Disable click ban đầu
+            }
+        });
     }
     
     private void setupControls(Scene scene) {
         scene.setOnKeyPressed(e -> {
+            if (!inputEnabled) return;
             switch (e.getCode()) {
                 case SPACE:
-                    performShoot();
-                    break;
-                case R:
-                    resetField();
-                    goals = 0;
-                    attempts = 0;
-                    scoreLabel.setText("Score: 0/0");
+                    if (controller != null) {
+                        controller.onConfirmChoice();
+                    }
                     break;
                 case ESCAPE:
                     Platform.exit();
@@ -494,24 +665,38 @@ public class MatchView extends Application {
                         try {
                             int zone = Integer.parseInt(text) - 1;
                             if (zone >= 0 && zone < 6) {
-                                selectZone(zone);
+                                controller.onZoneSelected(zone);
                             }
                         } catch (NumberFormatException ex) {
                             // Ignore
                         }
                     }
                     break;
-            }
+            };
         });
     }
     
     public void enableChoosingZone() {
         inputEnabled = true;
-        selectedZone = -1;
-        shootButton.setDisable(true);
-        for (Rectangle zone : goalZones) {
-            zone.setOpacity(0);
-        }
+        selectedZone = -1; // Reset lựa chọn
+        confirmButton.setDisable(true); // Chưa chọn nên chưa confirm được
+         // Reset style các zone (xóa highlight cũ nếu có)
+         for (int i = 0; i < 6; i++) {
+             resetZoneStyle(i);
+             goalZones[i].setMouseTransparent(false); // Cho phép click lại
+         }
+        // Có thể thêm hiệu ứng nhẹ nhàng cho các zone để báo hiệu có thể chọn
+    }
+
+    public void disableInput() {
+        inputEnabled = false;
+        confirmButton.setDisable(true);
+         // Làm mờ các zone hoặc vô hiệu hóa hover/click
+         for (Rectangle zone : goalZones) {
+             zone.setFill(Color.TRANSPARENT);
+             zone.setOpacity(0.2); // Mờ đi
+             zone.setMouseTransparent(true); // Không nhận event chuột
+         }
     }
     
     public int getSelectedZone(){
@@ -528,38 +713,45 @@ public class MatchView extends Application {
         });
     }
     
+    private static class Point {
+         int x, y;
+         Point(int x, int y) { this.x = x; this.y = y; }
+     }
+    
+    private Point getZoneCenter(int zoneIndex) {
+         if (zoneIndex < 0 || zoneIndex >= 6) {
+             // Trả về vị trí giữa gôn nếu index không hợp lệ
+             return new Point((int)(SCENE_WIDTH / 2), (int)(SCENE_HEIGHT * 0.1 + SCENE_HEIGHT * 0.1));
+         }
+         double zoneWidth = goalZones[0].getWidth();
+         double zoneHeight = goalZones[0].getHeight();
+         double zoneX = goalZones[zoneIndex].getX();
+         double zoneY = goalZones[zoneIndex].getY();
+         return new Point((int)(zoneX + zoneWidth / 2), (int)(zoneY + zoneHeight / 2));
+     }
+    
+    public void showMatchEndMessage(String message) {
+         Platform.runLater(() -> {
+             Alert alert = new Alert(Alert.AlertType.INFORMATION);
+             alert.setTitle("Match Over");
+             alert.setHeaderText(null);
+             alert.setContentText(message);
+             alert.showAndWait();
+             // if(controller != null) controller.onWindowClose();
+         });
+     }
+    
     public void showErrorMessage(String message) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
+            alert.setHeaderText(null);
             alert.setContentText(message);
             alert.showAndWait();
         });
     }
     
-    public static void main(String[] args) {
-        launch(args);
-    }
+//    public static void main(String[] args) {
+//        launch(args);
+//    }
 }
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
-    private void initComponents() {
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-
-        org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(0, 400, Short.MAX_VALUE)
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(0, 300, Short.MAX_VALUE)
-        );
-
-        pack();
-    }// </editor-fold>//GEN-END:initComponents
-
-    // Variables declaration - do not modify//GEN-BEGIN:variables
-    // End of variables declaration//GEN-END:variables
-

@@ -82,6 +82,4 @@ public class PenaltyShot {
     public void setShotTime(Timestamp shotTime) {
         this.shotTime = shotTime;
     }
-    
-    
 }
