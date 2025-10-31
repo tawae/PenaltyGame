@@ -26,8 +26,12 @@ import penaltyserver.model.UserDAO;
  * @author This PC
  */
 public class LobbyController {
-    private static MatchController matchController = new MatchController();
+    private static MatchController matchController;
     private static UserDAO userDAO;
+    
+    public static void setMatchController(MatchController matchController) {
+        LobbyController.matchController = matchController;
+    }
     
     public static void handleSendOnlineUsers(ObjectOutputStream out) throws IOException {
         List<String> onlineUsers = SessionManager.getOnlineUsers();
