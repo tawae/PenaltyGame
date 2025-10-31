@@ -28,6 +28,7 @@ public class LobbyController {
 
     private LobbyView lobbyView;
     private LoginController loginController;
+    private Scene lobbyScene;
 
     private Stage stage; // Biến này lưu cửa sổ chính
     private ObjectOutputStream out;
@@ -41,6 +42,7 @@ public class LobbyController {
         this.stage = stage;
         this.loginController = loginController;
         this.lobbyView = new LobbyView(username, this);
+        this.lobbyScene = new Scene(lobbyView.getView(), 600, 450);
 
         try {
             this.out = SocketService.getOutputStream();
@@ -57,9 +59,9 @@ public class LobbyController {
     }
 
     public void showLobbyView() {
-        Scene scene = new Scene(lobbyView.getView(), 600, 450); 
+//        Scene scene = new Scene(lobbyView.getView(), 600, 450); 
         stage.setTitle("Lobby - " + username);
-        stage.setScene(scene);
+        stage.setScene(lobbyScene);
         stage.setResizable(true); 
         stage.show();
 
@@ -77,6 +79,12 @@ public class LobbyController {
         }
         
         this.loadPlayers();
+    }
+    
+    public void hideLobbyView() {
+        if (stage != null) {
+            stage.hide();
+        }
     }
 
     public void loadPlayers() {

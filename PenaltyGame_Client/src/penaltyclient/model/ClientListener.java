@@ -110,13 +110,18 @@ public class ClientListener implements Runnable {
                             case "INVITE_FAIL":
                             case "INVITE_RESPONSE_ACCEPT":
                             case "INVITE_RESPONSE_DECLINE":
-                                // Bạn có thể gộp các case xử lý Alert đơn giản
                                 final String alertTitle = command;
-                                final String alertMessage = parts[1]; // Hoặc xử lý parts[1]
+                                final String alertMessage = parts[1];
                                 Platform.runLater(new Runnable() {
                                     @Override
                                     public void run() {
-                                        lobbyController.showAlert(alertTitle, alertMessage);
+                                        if (alertTitle == "INVITE_RESPONSE_ACCEPT") {
+                                            lobbyController.showAlert("Accepted", alertMessage + " accepted!");
+                                        } else if (alertTitle == "INVITE_RESPONSE_DECLINE") {
+                                            lobbyController.showAlert("Declined", alertMessage + " declined!");
+                                        } else {
+                                            lobbyController.showAlert(alertTitle, alertMessage);
+                                        }
                                     }
                                 });
                                 break;
@@ -132,6 +137,7 @@ public class ClientListener implements Runnable {
                                         // 1. Tạo MatchController MỚI
                                         // Cần truyền Stage hiện tại (mainStage) vào MatchController
                                         // Hoặc để MatchController tạo Stage mới và ẩn Stage cũ
+                                        lobbyController.hideLobbyView();
                                         matchController = new MatchController(
                                                 lobbyController.getUsername(),
                                                 opponentUsername,

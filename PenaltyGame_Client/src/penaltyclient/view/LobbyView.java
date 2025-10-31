@@ -16,12 +16,9 @@ import javafx.scene.text.Text;
 import javafx.util.Callback;
 import penaltyclient.controller.LobbyController;
 import penaltyclient.model.Player; 
-import penaltyclient.model.MatchRecord; // Import mới
-import penaltyclient.model.RankingEntry; // Import mới
+import penaltyclient.model.MatchRecord;
+import penaltyclient.model.RankingEntry;
 
-/**
- * Giao diện Lobby được xây dựng bằng JavaFX, với 3 Tab.
- */
 public class LobbyView {
 
     private LobbyController lobbyController;
@@ -51,7 +48,6 @@ public class LobbyView {
         rootPane = new BorderPane();
         rootPane.setStyle("-fx-background-color: #f0f0f0;");
 
-        // === 1. HEADER (GIỮ NGUYÊN) ===
         HBox headerPanel = new HBox(10);
         headerPanel.setAlignment(Pos.CENTER_LEFT);
         headerPanel.setPadding(new Insets(10));
@@ -78,15 +74,12 @@ public class LobbyView {
         
         rootPane.setTop(headerPanel);
 
-        // === 2. TAB PANE (PHẦN THAY ĐỔI CHÍNH) ===
         TabPane mainTabPane = new TabPane();
         mainTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE); // Không cho phép đóng tab
 
-        // --- Tab 1: Online Players ---
         Tab tabLobby = new Tab("Lobby");
         tabLobby.setContent(createOnlinePlayersPane());
         
-        // --- Tab 2: Match History ---
         Tab tabHistory = new Tab("Lịch sử đấu");
         tabHistory.setContent(createMatchHistoryPane());
         // Thêm sự kiện để load data khi nhấn vào tab
@@ -96,7 +89,6 @@ public class LobbyView {
             }
         });
 
-        // --- Tab 3: Ranking ---
         Tab tabRanking = new Tab("Bảng xếp hạng");
         tabRanking.setContent(createRankingPane());
         // Thêm sự kiện để load data khi nhấn vào tab
@@ -160,11 +152,7 @@ public class LobbyView {
 
         return rankingPane;
     }
-
-
-    // === CÁC HÀM KHỞI TẠO BẢNG ===
-
-    // Khởi tạo bảng Online Players (Đã có)
+    
     private void setupPlayersTable() {
         playerList = FXCollections.observableArrayList();
         tblPlayers = new TableView<>(playerList);
@@ -185,7 +173,6 @@ public class LobbyView {
         tblPlayers.getColumns().addAll(colName, colStatus, colScore, colAction);
     }
     
-    // Khởi tạo bảng Match History (Mới)
     private void setupMatchHistoryTable() {
         historyList = FXCollections.observableArrayList();
         tblMatchHistory = new TableView<>(historyList);
@@ -207,7 +194,6 @@ public class LobbyView {
         // historyList.add(new MatchRecord("PlayerC", "Loss (1-4)", "2025-10-27 09:15"));
     }
 
-    // Khởi tạo bảng Ranking (Mới)
     private void setupRankingTable() {
         rankingList = FXCollections.observableArrayList();
         tblRanking = new TableView<>(rankingList);
@@ -232,10 +218,6 @@ public class LobbyView {
         // rankingList.add(new RankingEntry(2, "PlayerA", 1400, 45));
     }
 
-
-    // === CÁC HÀM CẬP NHẬT DỮ LIỆU ===
-    
-    // Thêm người chơi vào Tab 1
     public void addPlayer(String name, String status, int score) {
         Player player = new Player(name, status, score);
         Platform.runLater(new Runnable() { 
@@ -298,8 +280,8 @@ public class LobbyView {
                         btn.setOnAction(event -> {
                             Player player = getTableView().getItems().get(getIndex());
                             lobbyController.handleInvite(player.getName());
-                            btn.setText("Invited"); 
-                            btn.setDisable(true);   
+//                            btn.setText("Invited"); 
+//                            btn.setDisable(true);   
                         });
                     }
                     @Override
