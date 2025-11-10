@@ -22,8 +22,21 @@ public class MatchController {
     }
     
     public void createAndStartMatch(User player1, User player2) {
-        String matchId = UUID.randomUUID().toString(); // Tạo ID trận đấu duy nhất
+        
+        String matchId = String.valueOf(matchDAO.createMatch(player1.getUserId()));
+        
+        if (matchId.equals("-1")) {
+            System.err.println("Error creating match in database.");
+            // Gửi lỗi về cho người chơi
+            ClientHandler handler1 = SessionManager.getSession(player1.getUsername());
+            ClientHandler handler2 = SessionManager.getSession(player2.getUsername());
+            if(handler1 != null) handler1.sendMessage("MATCH_FAIL:Server database error");
+            if(handler2 != null) handler2.sendMessage("MATCH_FAIL:Server database error");
+            return;
+        }
 
+        mrDAO.addPlayerToMatch(Integer.parseInt(matchId), player1.getUserId());
+        mrDAO.addPlayerToMatch(Integer.parseInt(matchId), player2.getUserId());
         // Lấy ClientHandler của 2 người chơi từ SessionManager
         ClientHandler handler1 = SessionManager.getSession(player1.getUsername());
         ClientHandler handler2 = SessionManager.getSession(player2.getUsername());
@@ -40,13 +53,11 @@ public class MatchController {
         Match match = new Match(matchId, player1, player2, handler1, handler2);
         activeMatches.put(matchId, match);
 
-        // Lưu matchId vào User object để ClientHandler có thể truy xuất
-        player1.setCurrentMatchId(matchId); // Giả sử có method này trong User
+        player1.setCurrentMatchId(matchId);
         player2.setCurrentMatchId(matchId);
 
         System.out.println("Match created [" + matchId + "]: " + player1.getUsername() + " vs " + player2.getUsername());
 
-        // Bắt đầu trận đấu
         startMatchLogic(match);
     }
     
@@ -149,14 +160,13 @@ public class MatchController {
         Match match = activeMatches.get(matchId);
         if (match == null) {
             System.err.println("Error handling choice: Match not found for ID " + matchId);
-            user.setCurrentMatchId(null); // Reset ID nếu trận không tồn tại
+            user.setCurrentMatchId(null);
             return;
         }
 
-        // Kiểm tra xem lượt chơi có còn hợp lệ không (timer còn chạy không)
         if (match.getTurnTimer() == null) {
             System.out.println("Match [" + matchId + "]: Choice from " + user.getUsername() + " ignored, turn already processed or timed out.");
-            return; // Lượt đã kết thúc
+            return;
         }
 
         User currentShooter = match.getCurrentShooter();
@@ -213,10 +223,22 @@ public class MatchController {
         }
 
         boolean isGoal = (!shooterChoice.equals(keeperChoice));
-        String resultStr = isGoal ? "GOAL" : "SAVE";
+        String resultStr = isGoal ? "goal" : "save";
 
         if (isGoal) {
             match.incrementScore(currentShooter); // Cập nhật điểm trong model Match
+        }
+        
+        try {
+            int dbMatchId = Integer.parseInt(match.getMatchId());
+            int shooterUserId = currentShooter.getUserId();
+            int shotNumber = match.getCurrentRound(); // Lấy round hiện tại làm số thứ tự cú sút
+            int direction = shooterChoice; // Lấy lựa chọn của người sút
+
+            psDAO.recordShot(dbMatchId, shooterUserId, shotNumber, direction, resultStr);
+
+        } catch (NumberFormatException e) {
+            System.err.println("Error saving shot to DB: Invalid Match ID format " + match.getMatchId());
         }
 
         System.out.println("Match [" + match.getMatchId() + "] Turn Result: Shooter(" + shooterChoice + ") vs Keeper(" + keeperChoice + ") -> " + resultStr);
@@ -290,7 +312,26 @@ public class MatchController {
             timer.cancel();
             match.setTurnTimer(null);
         }
+        
+        // luu vao csdl
+        try {
+            int dbMatchId = Integer.parseInt(match.getMatchId());
 
+            // 4.1. Cập nhật bảng 'matches' (set end_time, status)
+            matchDAO.finishMatch(dbMatchId);
+
+            // 4.2. Cập nhật điểm số cuối cùng cho cả 2 người chơi
+            mrDAO.updateScore(dbMatchId, match.getPlayer1().getUserId(), match.getPlayer1Score());
+            mrDAO.updateScore(dbMatchId, match.getPlayer2().getUserId(), match.getPlayer2Score());
+
+            // 4.3. Đánh dấu người chiến thắng (nếu có)
+            if (winner != null) {
+                mrDAO.setWinner(dbMatchId, winner.getUserId());
+            }
+
+        } catch (NumberFormatException e) {
+            System.err.println("Error saving match end to DB: Invalid Match ID format " + match.getMatchId());
+        }
         // Gửi thông báo kết thúc
         match.sendToPlayer(match.getPlayer1(), "MATCH_END:" + winnerUsername + ":" + match.getPlayer1Score() + ":" + match.getPlayer2Score());
         match.sendToPlayer(match.getPlayer2(), "MATCH_END:" + winnerUsername + ":" + match.getPlayer2Score() + ":" + match.getPlayer1Score());
@@ -324,26 +365,38 @@ public class MatchController {
             match.setTurnTimer(null);
         }
 
-        match.setMatchStatus("aborted"); // Đánh dấu trận bị hủy
-        match.setEndTime(new Timestamp(System.currentTimeMillis()));
-
+        // Lấy người chơi còn lại (người chiến thắng)
         User otherPlayer = match.getOtherPlayer(user);
 
-        // Gửi thông báo và xử thắng cho người còn lại
         if (otherPlayer != null) {
+            // Gửi thông báo cho người còn lại rằng đối thủ đã thoát
             ClientHandler otherHandler = SessionManager.getSession(otherPlayer.getUsername());
             if (otherHandler != null) { // Kiểm tra xem người kia còn online không
                 otherHandler.sendMessage("OPPONENT_DISCONNECTED");
-                // Gửi luôn kết quả thắng (tùy chọn)
-                // otherHandler.sendMessage("MATCH_END:" + otherPlayer.getUsername() + ":" + (otherPlayer.equals(match.getPlayer1())?match.getPlayer1Score():match.getPlayer2Score()) + ":" + (otherPlayer.equals(match.getPlayer1())?match.getPlayer2Score():match.getPlayer1Score()) );
             }
-            otherPlayer.setCurrentMatchId(null); // Reset matchId người còn lại
+
+            // Set tỉ số cứng là 5-0 cho người ở lại
+            if (otherPlayer.equals(match.getPlayer1())) {
+                match.setPlayer1Score(5);
+                match.setPlayer2Score(0);
+            } else {
+                match.setPlayer2Score(5);
+                match.setPlayer1Score(0);
+            }
+
+            // Gọi endMatch để lưu CSDL (với tỉ số 5-0) và gửi kết quả
+            // endMatch sẽ tự động dọn dẹp activeMatches và reset matchId cho cả 2
+            endMatch(match, otherPlayer); 
+
+        } else {
+            // Trường hợp hiếm: không tìm thấy người chơi kia (ví dụ: cả 2 thoát gần như cùng lúc)
+            // Chỉ dọn dẹp mà không lưu
+            activeMatches.remove(matchId);
+            user.setCurrentMatchId(null); // Reset matchId người disconnect
+            System.out.println("Match [" + matchId + "] removed. No other player found.");
         }
 
-        // Dọn dẹp
-        activeMatches.remove(matchId);
-        user.setCurrentMatchId(null); // Reset matchId người disconnect
-        System.out.println("Match [" + matchId + "] removed due to disconnect.");
+        System.out.println("Match [" + matchId + "] processed disconnect for " + user.getUsername());
     }
 
     // Inner class representing a match between two players

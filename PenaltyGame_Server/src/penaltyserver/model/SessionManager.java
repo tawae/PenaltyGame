@@ -29,6 +29,11 @@ public class SessionManager {
     public static ClientHandler getSession(String username) {
         return sessions.get(username);
     }
+
+    public static Map<String, ClientHandler> getSessions() {
+        return sessions;
+    }
+ 
     
     public static List<String> getOnlineUsers() {
         return new ArrayList<>(sessions.keySet());

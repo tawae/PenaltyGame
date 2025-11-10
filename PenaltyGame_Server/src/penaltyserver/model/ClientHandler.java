@@ -80,6 +80,13 @@ public class ClientHandler extends Thread {
                             LobbyController.handleSendOnlineUsers(out);
                             System.out.println(username + "đang online");
                             break;
+                        case "GET_MATCH_HISTORY":
+                            LobbyController.handleSendMatchHistory(out, user.getUserId());
+                            break;
+                        case "GET_RANKING":
+                            LobbyController.handleSendRanking(out);
+                            break;
+                            
                         case "INVITE":
                             String targetUsername = parts[1];
                             LobbyController.handleInviteB(targetUsername, this, username);
